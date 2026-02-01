@@ -155,8 +155,13 @@ async def process_name(message: Message, state: FSMContext) -> None:
     await state.update_data(name=name)
     await state.set_state(AddTobaccoStates.waiting_brand)
     await message.answer(
-        "🏷 *Укажи бренд:*\n\n"
-        "_Например: Darkside, Tangiers_",
+        "🏷 *Укажи бренд табака:*\n\n"
+        "Популярные бренды:\n"
+        "• Darkside, Tangiers, Fumari\n"
+        "• Must Have, Daily Hookah\n"
+        "• Element, Burn, Spectrum\n"
+        "• DarkSide, Duft, Chabacco\n\n"
+        "_Напиши название или нажми «Пропустить»_",
         parse_mode="Markdown",
         reply_markup=skip_brand_menu(),
     )
@@ -173,7 +178,8 @@ async def skip_brand(callback: CallbackQuery, state: FSMContext, session: AsyncS
     categories = result.scalars().all()
 
     await callback.message.edit_text(
-        "📁 *Выбери категорию:*",
+        "📁 *Выбери категорию вкуса:*\n\n"
+        "_Категория поможет AI лучше\nподбирать сочетания_",
         parse_mode="Markdown",
         reply_markup=categories_menu(list(categories)),
     )
@@ -192,7 +198,8 @@ async def process_brand(message: Message, state: FSMContext, session: AsyncSessi
     categories = result.scalars().all()
 
     await message.answer(
-        "📁 *Выбери категорию:*",
+        "📁 *Выбери категорию вкуса:*\n\n"
+        "_Категория поможет AI лучше\nподбирать сочетания_",
         parse_mode="Markdown",
         reply_markup=categories_menu(list(categories)),
     )
