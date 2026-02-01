@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.database.models import Category, Tobacco, User
+from bot.database.utils import get_or_create_user
 from bot.keyboards.menus import (
     back_to_menu,
     categories_menu,
@@ -32,15 +33,13 @@ class AddTobaccoStates(StatesGroup):
 @router.callback_query(F.data == "collection")
 async def show_collection(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает коллекцию табаков."""
-    # Получаем пользователя
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    # Получаем или создаём пользователя
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        await callback.answer("Пользователь не найден", show_alert=True)
-        return
 
     # Получаем табаки с категориями
     result = await session.execute(
@@ -73,10 +72,12 @@ async def collection_page(callback: CallbackQuery, session: AsyncSession) -> Non
     """Переключение страницы коллекции."""
     page = int(callback.data.split(":")[1])
 
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
 
     result = await session.execute(
         select(Tobacco)
@@ -209,11 +210,13 @@ async def process_category(callback: CallbackQuery, state: FSMContext, session: 
     name = data["name"]
     brand = data.get("brand")
 
-    # Получаем пользователя
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    # Получаем или создаём пользователя
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one()
 
     # Создаём табак
     tobacco = Tobacco(
@@ -277,11 +280,13 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
         )
         return
     
-    # Получаем пользователя
-    result = await session.execute(
-        select(User).where(User.telegram_id == message.from_user.id)
+    # Получаем или создаём пользователя
+    user = await get_or_create_user(
+        session,
+        telegram_id=message.from_user.id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
     )
-    user = result.scalar_one()
     
     # Получаем категории для сопоставления
     result = await session.execute(select(Category))
@@ -374,10 +379,12 @@ async def delete_tobacco(callback: CallbackQuery, session: AsyncSession) -> None
     await callback.answer("✅ Удалено!")
 
     # Показываем коллекцию
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
 
     result = await session.execute(
         select(Tobacco)

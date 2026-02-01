@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from bot.database.models import Mix, Tobacco, User
+from bot.database.utils import get_or_create_user
 from bot.keyboards.menus import back_to_menu, mix_menu, mix_rating_menu
 from bot.services.llm_service import llm_service
 
@@ -28,15 +29,13 @@ def get_role_emoji(role: str) -> str:
 @router.callback_query(F.data == "mix_menu")
 async def show_mix_menu(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает меню выбора типа микса."""
-    # Считаем табаки пользователя
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    # Получаем или создаём пользователя
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        await callback.answer("Пользователь не найден", show_alert=True)
-        return
 
     result = await session.execute(
         select(Tobacco).where(Tobacco.user_id == user.id)
@@ -64,10 +63,12 @@ async def show_mix_menu(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data == "mix_by_tobacco")
 async def select_base_tobacco(callback: CallbackQuery, session: AsyncSession) -> None:
     """Выбор базового табака для микса."""
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
 
     result = await session.execute(
         select(Tobacco)
@@ -235,19 +236,13 @@ async def _generate_mix(
 ) -> None:
     """Общая функция генерации микса."""
     try:
-        # Получаем пользователя
-        result = await session.execute(
-            select(User).where(User.telegram_id == callback.from_user.id)
+        # Получаем или создаём пользователя
+        user = await get_or_create_user(
+            session,
+            telegram_id=callback.from_user.id,
+            username=callback.from_user.username,
+            first_name=callback.from_user.first_name,
         )
-        user = result.scalar_one_or_none()
-
-        if not user:
-            await callback.message.edit_text(
-                "❌ Пользователь не найден",
-                reply_markup=back_to_menu(),
-            )
-            await callback.answer()
-            return
 
         # Получаем табаки с категориями
         result = await session.execute(
@@ -400,14 +395,12 @@ async def favorite_mix(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data == "history")
 async def show_history(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает историю миксов."""
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        await callback.answer("Пользователь не найден", show_alert=True)
-        return
 
     result = await session.execute(
         select(Mix)
@@ -447,14 +440,12 @@ async def show_history(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data == "favorites")
 async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает избранные миксы."""
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
-
-    if not user:
-        await callback.answer("Пользователь не найден", show_alert=True)
-        return
 
     result = await session.execute(
         select(Mix)

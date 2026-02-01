@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.database.models import Tobacco, User
+from bot.database.utils import get_or_create_user
 from bot.keyboards.menus import main_menu
 
 router = Router()
@@ -62,19 +63,19 @@ async def cmd_start(message: Message, session: AsyncSession) -> None:
 @router.callback_query(F.data == "main_menu")
 async def show_main_menu(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает главное меню."""
-    # Получаем пользователя
-    result = await session.execute(
-        select(User).where(User.telegram_id == callback.from_user.id)
+    # Получаем или создаём пользователя
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
     )
-    user = result.scalar_one_or_none()
 
-    count = 0
-    if user:
-        result = await session.execute(
-            select(Tobacco).where(Tobacco.user_id == user.id)
-        )
-        tobaccos = result.scalars().all()
-        count = len(tobaccos)
+    result = await session.execute(
+        select(Tobacco).where(Tobacco.user_id == user.id)
+    )
+    tobaccos = result.scalars().all()
+    count = len(tobaccos)
 
     await callback.message.edit_text(
         "🏠 *Главное меню*\n\n"
