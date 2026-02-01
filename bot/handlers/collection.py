@@ -218,6 +218,24 @@ async def process_category(callback: CallbackQuery, state: FSMContext, session: 
         first_name=callback.from_user.first_name,
     )
 
+    # Проверяем уникальность названия
+    result = await session.execute(
+        select(Tobacco)
+        .where(Tobacco.user_id == user.id)
+        .where(Tobacco.name.ilike(name))
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        await state.clear()
+        await callback.message.edit_text(
+            f"⚠️ *Табак «{name}» уже есть в коллекции!*",
+            parse_mode="Markdown",
+            reply_markup=back_to_menu(),
+        )
+        await callback.answer()
+        return
+
     # Создаём табак
     tobacco = Tobacco(
         user_id=user.id,
@@ -292,7 +310,14 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
     result = await session.execute(select(Category))
     categories = {c.name.lower(): c.id for c in result.scalars().all()}
     
+    # Получаем существующие табаки пользователя для проверки дубликатов
+    result = await session.execute(
+        select(Tobacco.name).where(Tobacco.user_id == user.id)
+    )
+    existing_names = {name.lower() for name in result.scalars().all()}
+    
     added = []
+    skipped = []
     errors = []
     
     for line in lines:
@@ -301,6 +326,11 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
         
         if len(name) < 2:
             errors.append(f"• `{line}` — слишком короткое название")
+            continue
+        
+        # Проверяем дубликат
+        if name.lower() in existing_names:
+            skipped.append(f"• {name}")
             continue
         
         brand = parts[1] if len(parts) > 1 else None
@@ -314,6 +344,7 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
             category_id=category_id,
         )
         session.add(tobacco)
+        existing_names.add(name.lower())  # Добавляем в набор чтобы избежать дублей в одном списке
         added.append(f"• {name}" + (f" ({brand})" if brand else ""))
     
     await session.commit()
@@ -325,6 +356,11 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
         text += "\n".join(added[:15])  # Показываем максимум 15
         if len(added) > 15:
             text += f"\n_...и ещё {len(added) - 15}_"
+    
+    if skipped:
+        text += f"\n\n⏭ *Пропущено (уже есть): {len(skipped)}*\n" + "\n".join(skipped[:5])
+        if len(skipped) > 5:
+            text += f"\n_...и ещё {len(skipped) - 5}_"
     
     if errors:
         text += f"\n\n⚠️ *Ошибки ({len(errors)}):*\n" + "\n".join(errors[:5])
