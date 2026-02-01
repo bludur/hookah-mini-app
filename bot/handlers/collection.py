@@ -12,7 +12,9 @@ from bot.keyboards.menus import (
     back_to_menu,
     categories_menu,
     collection_menu,
+    confirm_delete_all_menu,
     confirm_delete_menu,
+    delete_collection_menu,
     skip_brand_menu,
     tobacco_detail_menu,
 )
@@ -26,6 +28,11 @@ class AddTobaccoStates(StatesGroup):
     waiting_brand = State()
     waiting_category = State()
     waiting_bulk = State()  # Для массового добавления
+
+
+class DeleteTobaccoStates(StatesGroup):
+    """Состояния для удаления табаков."""
+    selecting = State()  # Выбор табаков для удаления
 
 
 # ============ ПРОСМОТР КОЛЛЕКЦИИ ============
@@ -451,6 +458,211 @@ async def delete_tobacco(callback: CallbackQuery, session: AsyncSession) -> None
             parse_mode="Markdown",
             reply_markup=collection_menu(list(tobaccos)),
         )
+
+
+# ============ МАССОВОЕ УДАЛЕНИЕ ============
+
+@router.callback_query(F.data == "delete_mode")
+async def start_delete_mode(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    """Начинает режим удаления табаков."""
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Tobacco)
+        .where(Tobacco.user_id == user.id)
+        .options(selectinload(Tobacco.category))
+        .order_by(Tobacco.name)
+    )
+    tobaccos = result.scalars().all()
+
+    if not tobaccos:
+        await callback.answer("Коллекция пуста", show_alert=True)
+        return
+
+    await state.set_state(DeleteTobaccoStates.selecting)
+    await state.update_data(selected=[], page=0)
+
+    await callback.message.edit_text(
+        "🗑 *Режим удаления*\n\n"
+        "Выбери табаки для удаления\n"
+        "(нажми чтобы выбрать/снять):",
+        parse_mode="Markdown",
+        reply_markup=delete_collection_menu(list(tobaccos)),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("toggle_delete:"), DeleteTobaccoStates.selecting)
+async def toggle_delete_selection(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    """Переключает выбор табака для удаления."""
+    tobacco_id = int(callback.data.split(":")[1])
+    
+    data = await state.get_data()
+    selected = set(data.get("selected", []))
+    page = data.get("page", 0)
+    
+    if tobacco_id in selected:
+        selected.discard(tobacco_id)
+    else:
+        selected.add(tobacco_id)
+    
+    await state.update_data(selected=list(selected))
+    
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Tobacco)
+        .where(Tobacco.user_id == user.id)
+        .options(selectinload(Tobacco.category))
+        .order_by(Tobacco.name)
+    )
+    tobaccos = result.scalars().all()
+
+    await callback.message.edit_reply_markup(
+        reply_markup=delete_collection_menu(list(tobaccos), selected, page)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("delete_page:"), DeleteTobaccoStates.selecting)
+async def delete_page(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    """Переключает страницу в режиме удаления."""
+    page = int(callback.data.split(":")[1])
+    
+    data = await state.get_data()
+    selected = set(data.get("selected", []))
+    await state.update_data(page=page)
+    
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Tobacco)
+        .where(Tobacco.user_id == user.id)
+        .options(selectinload(Tobacco.category))
+        .order_by(Tobacco.name)
+    )
+    tobaccos = result.scalars().all()
+
+    await callback.message.edit_reply_markup(
+        reply_markup=delete_collection_menu(list(tobaccos), selected, page)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "confirm_delete_selected", DeleteTobaccoStates.selecting)
+async def delete_selected_tobaccos(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    """Удаляет выбранные табаки."""
+    data = await state.get_data()
+    selected = data.get("selected", [])
+    
+    if not selected:
+        await callback.answer("Ничего не выбрано", show_alert=True)
+        return
+    
+    # Удаляем выбранные табаки
+    result = await session.execute(
+        select(Tobacco).where(Tobacco.id.in_(selected))
+    )
+    tobaccos_to_delete = result.scalars().all()
+    
+    count = len(tobaccos_to_delete)
+    for tobacco in tobaccos_to_delete:
+        await session.delete(tobacco)
+    
+    await session.commit()
+    await state.clear()
+    
+    await callback.answer(f"✅ Удалено: {count} табаков")
+    
+    # Возвращаемся в коллекцию
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Tobacco)
+        .where(Tobacco.user_id == user.id)
+        .options(selectinload(Tobacco.category))
+        .order_by(Tobacco.name)
+    )
+    tobaccos = result.scalars().all()
+
+    if not tobaccos:
+        await callback.message.edit_text(
+            "📦 *Коллекция пуста*\n\n"
+            "Добавь табаки!",
+            parse_mode="Markdown",
+            reply_markup=back_to_menu(),
+        )
+    else:
+        await callback.message.edit_text(
+            f"📦 *Твоя коллекция* ({len(tobaccos)} шт.)\n\n"
+            "Нажми на табак:",
+            parse_mode="Markdown",
+            reply_markup=collection_menu(list(tobaccos)),
+        )
+
+
+@router.callback_query(F.data == "delete_all_tobaccos")
+async def confirm_delete_all_tobaccos(callback: CallbackQuery, state: FSMContext) -> None:
+    """Подтверждение удаления всех табаков."""
+    await state.clear()
+    await callback.message.edit_text(
+        "⚠️ *Удалить ВСЕ табаки?*\n\n"
+        "Это действие нельзя отменить!\n"
+        "Все табаки будут удалены из коллекции.",
+        parse_mode="Markdown",
+        reply_markup=confirm_delete_all_menu("delete_all"),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "confirm_delete_all")
+async def delete_all_tobaccos(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Удаляет все табаки пользователя."""
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Tobacco).where(Tobacco.user_id == user.id)
+    )
+    tobaccos = result.scalars().all()
+    
+    count = len(tobaccos)
+    for tobacco in tobaccos:
+        await session.delete(tobacco)
+    
+    await session.commit()
+    
+    await callback.message.edit_text(
+        f"✅ *Удалено: {count} табаков*\n\n"
+        "Коллекция очищена.",
+        parse_mode="Markdown",
+        reply_markup=back_to_menu(),
+    )
+    await callback.answer()
 
 
 # ============ РЕДАКТИРОВАНИЕ ТАБАКА ============

@@ -66,9 +66,53 @@ def collection_menu(
     # Нижние кнопки
     bottom = InlineKeyboardBuilder()
     bottom.button(text="➕ Добавить", callback_data="add_tobacco")
+    bottom.button(text="🗑 Удалить", callback_data="delete_mode")
     bottom.button(text="◀️ Меню", callback_data="main_menu")
-    bottom.adjust(2)
+    bottom.adjust(2, 1)
     builder.attach(bottom)
+
+    return builder.as_markup()
+
+
+def delete_collection_menu(
+    tobaccos: List[Any], selected: set = None, page: int = 0, page_size: int = 8
+) -> InlineKeyboardMarkup:
+    """Меню удаления табаков с мультивыбором."""
+    builder = InlineKeyboardBuilder()
+    selected = selected or set()
+
+    total_pages = max(1, (len(tobaccos) + page_size - 1) // page_size)
+    start_idx = page * page_size
+    end_idx = min(start_idx + page_size, len(tobaccos))
+    page_tobaccos = tobaccos[start_idx:end_idx]
+
+    for tobacco in page_tobaccos:
+        check = "✅" if tobacco.id in selected else "⬜"
+        text = f"{check} {tobacco.name}"
+        if tobacco.brand:
+            text += f" • {tobacco.brand}"
+        builder.button(text=text, callback_data=f"toggle_delete:{tobacco.id}")
+
+    builder.adjust(1)
+
+    # Пагинация
+    if total_pages > 1:
+        pagination = InlineKeyboardBuilder()
+        if page > 0:
+            pagination.button(text="◀️", callback_data=f"delete_page:{page - 1}")
+        pagination.button(text=f"{page + 1}/{total_pages}", callback_data="noop")
+        if page < total_pages - 1:
+            pagination.button(text="▶️", callback_data=f"delete_page:{page + 1}")
+        pagination.adjust(3)
+        builder.attach(pagination)
+
+    # Кнопки действий
+    actions = InlineKeyboardBuilder()
+    actions.button(text="🗑 Удалить выбранные", callback_data="confirm_delete_selected")
+    actions.button(text="🗑 Удалить ВСЕ", callback_data="delete_all_tobaccos")
+    actions.button(text="❌ Отмена", callback_data="collection")
+    actions.adjust(1)
+    builder.attach(actions)
 
     return builder.as_markup()
 
@@ -128,10 +172,29 @@ def confirm_delete_menu(tobacco_id: int) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+def confirm_delete_all_menu(action: str) -> InlineKeyboardMarkup:
+    """Меню подтверждения удаления всего."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✅ Да, удалить ВСЁ", callback_data=f"confirm_{action}")
+    builder.button(text="❌ Отмена", callback_data="collection" if action == "delete_all" else "favorites")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 def back_to_menu() -> InlineKeyboardMarkup:
     """Кнопка возврата в главное меню."""
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️ Главное меню", callback_data="main_menu")
+    return builder.as_markup()
+
+
+def favorites_menu(has_favorites: bool = True) -> InlineKeyboardMarkup:
+    """Меню избранного с опцией очистки."""
+    builder = InlineKeyboardBuilder()
+    if has_favorites:
+        builder.button(text="🗑 Очистить избранное", callback_data="clear_favorites")
+    builder.button(text="◀️ Главное меню", callback_data="main_menu")
+    builder.adjust(1)
     return builder.as_markup()
 
 

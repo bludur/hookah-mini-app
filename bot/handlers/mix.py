@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from bot.database.models import Mix, Tobacco, User
 from bot.database.utils import get_or_create_user
-from bot.keyboards.menus import back_to_menu, mix_menu, mix_rating_menu
+from bot.keyboards.menus import back_to_menu, confirm_delete_all_menu, favorites_menu, mix_menu, mix_rating_menu
 from bot.services.llm_service import llm_service
 
 router = Router()
@@ -460,7 +460,7 @@ async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None
             "⭐ *Избранное пусто*\n\n"
             "Добавляй понравившиеся миксы!",
             parse_mode="Markdown",
-            reply_markup=back_to_menu(),
+            reply_markup=favorites_menu(has_favorites=False),
         )
     else:
         text = "⭐ *Избранные миксы*\n\n"
@@ -474,6 +474,51 @@ async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None
         await callback.message.edit_text(
             text,
             parse_mode="Markdown",
-            reply_markup=back_to_menu(),
+            reply_markup=favorites_menu(has_favorites=True),
         )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "clear_favorites")
+async def confirm_clear_favorites(callback: CallbackQuery) -> None:
+    """Подтверждение очистки избранного."""
+    await callback.message.edit_text(
+        "⚠️ *Очистить избранное?*\n\n"
+        "Все миксы будут убраны из избранного.\n"
+        "(Сами миксы останутся в истории)",
+        parse_mode="Markdown",
+        reply_markup=confirm_delete_all_menu("clear_favorites"),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "confirm_clear_favorites")
+async def clear_all_favorites(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Очищает все избранные миксы."""
+    user = await get_or_create_user(
+        session,
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        first_name=callback.from_user.first_name,
+    )
+
+    result = await session.execute(
+        select(Mix)
+        .where(Mix.user_id == user.id)
+        .where(Mix.is_favorite == True)
+    )
+    mixes = result.scalars().all()
+    
+    count = len(mixes)
+    for mix in mixes:
+        mix.is_favorite = False
+    
+    await session.commit()
+    
+    await callback.message.edit_text(
+        f"✅ *Избранное очищено*\n\n"
+        f"Убрано из избранного: {count} миксов",
+        parse_mode="Markdown",
+        reply_markup=back_to_menu(),
+    )
     await callback.answer()
