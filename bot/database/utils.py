@@ -11,6 +11,7 @@ async def get_or_create_user(
     first_name: str = None,
 ) -> User:
     """Получает пользователя из БД или создаёт нового."""
+    # Используем fresh query каждый раз
     result = await session.execute(
         select(User).where(User.telegram_id == telegram_id)
     )
@@ -25,5 +26,11 @@ async def get_or_create_user(
         session.add(user)
         await session.commit()
         await session.refresh(user)
+    else:
+        # Обновляем данные если изменились
+        if user.username != username or user.first_name != first_name:
+            user.username = username
+            user.first_name = first_name
+            await session.commit()
 
     return user
