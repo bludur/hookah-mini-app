@@ -236,7 +236,7 @@ export function CollectionPage() {
         }}
         title="Добавить табак"
       >
-        <div className="space-y-4 pb-16">
+        <div className="space-y-3">
           <Input
             label="Название"
             placeholder="Например: Манго"
@@ -253,28 +253,22 @@ export function CollectionPage() {
             <label className="block text-sm font-medium text-tg-text mb-2">
               Категория
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <select
+              value={newCategoryId || ''}
+              onChange={(e) => {
+                hapticFeedback.selection();
+                setNewCategoryId(e.target.value ? Number(e.target.value) : null);
+              }}
+              className="w-full px-4 py-3 rounded-xl bg-tg-secondary-bg text-tg-text focus:outline-none"
+            >
+              <option value="">Не выбрана</option>
               {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    hapticFeedback.selection();
-                    setNewCategoryId(newCategoryId === cat.id ? null : cat.id);
-                  }}
-                  className={`p-3 rounded-xl text-left transition-colors tap-highlight ${
-                    newCategoryId === cat.id
-                      ? 'bg-tg-button text-tg-button-text'
-                      : 'bg-tg-secondary-bg text-tg-text'
-                  }`}
-                >
-                  <span className="mr-2">{cat.emoji}</span>
-                  {cat.name}
-                </button>
+                <option key={cat.id} value={cat.id}>
+                  {cat.emoji} {cat.name}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
-        </div>
-        <div className="sticky bottom-0 bg-tg-bg pt-2 pb-4 -mx-6 px-6 -mb-4">
           <Button
             fullWidth
             onClick={handleAddTobacco}
@@ -295,10 +289,9 @@ export function CollectionPage() {
         }}
         title="Добавить список"
       >
-        <div className="space-y-4 pb-16">
+        <div className="space-y-3">
           <p className="text-sm text-tg-hint">
             Введите табаки, каждый с новой строки.
-            <br />
             Формат: <code className="bg-tg-secondary-bg px-1 rounded">Название | Бренд</code>
           </p>
           <textarea
@@ -307,10 +300,8 @@ export function CollectionPage() {
 Клубника | Fumari"
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
-            className="w-full h-40 px-4 py-3 rounded-xl bg-tg-secondary-bg text-tg-text placeholder-tg-hint focus:outline-none resize-none"
+            className="w-full h-32 px-4 py-3 rounded-xl bg-tg-secondary-bg text-tg-text placeholder-tg-hint focus:outline-none resize-none"
           />
-        </div>
-        <div className="sticky bottom-0 bg-tg-bg pt-2 pb-4 -mx-6 px-6 -mb-4">
           <Button
             fullWidth
             onClick={handleBulkAdd}
@@ -332,48 +323,45 @@ export function CollectionPage() {
         title={selectedTobacco?.name || 'Табак'}
       >
         {selectedTobacco && (
-          <>
-            <div className="space-y-4 pb-16">
-              <div className="flex items-center gap-4">
-                <span className="text-5xl">
-                  {selectedTobacco.category?.emoji || '🔸'}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">
+                {selectedTobacco.category?.emoji || '🔸'}
+              </span>
+              <div>
+                <h3 className="text-lg font-bold text-tg-text">
+                  {selectedTobacco.name}
+                </h3>
+                {selectedTobacco.brand && (
+                  <p className="text-tg-hint text-sm">{selectedTobacco.brand}</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="text-sm">
+              <div className="flex justify-between py-2 border-b border-tg-secondary-bg">
+                <span className="text-tg-hint">Категория</span>
+                <span className="text-tg-text">
+                  {selectedTobacco.category?.name || 'Не указана'}
                 </span>
-                <div>
-                  <h3 className="text-xl font-bold text-tg-text">
-                    {selectedTobacco.name}
-                  </h3>
-                  {selectedTobacco.brand && (
-                    <p className="text-tg-hint">{selectedTobacco.brand}</p>
-                  )}
-                </div>
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between py-2 border-b border-tg-secondary-bg">
-                  <span className="text-tg-hint">Категория</span>
-                  <span className="text-tg-text">
-                    {selectedTobacco.category?.name || 'Не указана'}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-tg-secondary-bg">
-                  <span className="text-tg-hint">Добавлен</span>
-                  <span className="text-tg-text">
-                    {new Date(selectedTobacco.created_at).toLocaleDateString('ru-RU')}
-                  </span>
-                </div>
+              <div className="flex justify-between py-2">
+                <span className="text-tg-hint">Добавлен</span>
+                <span className="text-tg-text">
+                  {new Date(selectedTobacco.created_at).toLocaleDateString('ru-RU')}
+                </span>
               </div>
             </div>
-            <div className="sticky bottom-0 bg-tg-bg pt-2 pb-4 -mx-6 px-6 -mb-4">
-              <Button
-                fullWidth
-                variant="danger"
-                onClick={() => handleDeleteTobacco(selectedTobacco.id)}
-                icon={<Trash2 className="w-5 h-5" />}
-              >
-                Удалить
-              </Button>
-            </div>
-          </>
+
+            <Button
+              fullWidth
+              variant="danger"
+              onClick={() => handleDeleteTobacco(selectedTobacco.id)}
+              icon={<Trash2 className="w-4 h-4" />}
+            >
+              Удалить
+            </Button>
+          </div>
         )}
       </Modal>
     </div>
