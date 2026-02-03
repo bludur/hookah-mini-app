@@ -34,19 +34,19 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       <div className="relative w-full sm:max-w-md bg-tg-bg rounded-t-2xl sm:rounded-2xl animate-slide-up">
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-tg-secondary-bg">
-            <h2 className="text-base font-semibold text-tg-text">{title}</h2>
+          <div className="flex items-center justify-between px-3 py-2 border-b border-tg-secondary-bg">
+            <h2 className="text-sm font-semibold text-tg-text">{title}</h2>
             <button
               onClick={onClose}
               className="p-1 -mr-1 rounded-full hover:bg-tg-secondary-bg transition-colors tap-highlight"
             >
-              <X className="w-5 h-5 text-tg-hint" />
+              <X className="w-4 h-4 text-tg-hint" />
             </button>
           </div>
         )}
         
         {/* Body */}
-        <div className="px-4 py-3">
+        <div className="px-3 py-2">
           {children}
         </div>
       </div>

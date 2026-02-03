@@ -236,44 +236,44 @@ export function CollectionPage() {
         }}
         title="Добавить табак"
       >
-        <div className="space-y-3">
-          <Input
-            label="Название"
-            placeholder="Например: Манго"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-          <Input
-            label="Бренд (опционально)"
-            placeholder="Например: Darkside"
-            value={newBrand}
-            onChange={(e) => setNewBrand(e.target.value)}
-          />
-          <div>
-            <label className="block text-sm font-medium text-tg-text mb-2">
-              Категория
-            </label>
-            <select
-              value={newCategoryId || ''}
-              onChange={(e) => {
-                hapticFeedback.selection();
-                setNewCategoryId(e.target.value ? Number(e.target.value) : null);
-              }}
-              className="w-full px-4 py-3 rounded-xl bg-tg-secondary-bg text-tg-text focus:outline-none"
-            >
-              <option value="">Не выбрана</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.emoji} {cat.name}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input
+                placeholder="Название"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            </div>
+            <div className="w-28">
+              <Input
+                placeholder="Бренд"
+                value={newBrand}
+                onChange={(e) => setNewBrand(e.target.value)}
+              />
+            </div>
           </div>
+          <select
+            value={newCategoryId || ''}
+            onChange={(e) => {
+              hapticFeedback.selection();
+              setNewCategoryId(e.target.value ? Number(e.target.value) : null);
+            }}
+            className="w-full px-3 py-2 rounded-lg text-sm bg-tg-secondary-bg text-tg-text focus:outline-none"
+          >
+            <option value="">Категория (опц.)</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.emoji} {cat.name}
+              </option>
+            ))}
+          </select>
           <Button
             fullWidth
             onClick={handleAddTobacco}
             loading={isSubmitting}
             disabled={!newName.trim()}
+            size="sm"
           >
             Добавить
           </Button>
