@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Package, ListPlus, X } from 'lucide-react';
+import { Plus, Search, Trash2, Package, ListPlus } from 'lucide-react';
 import { useStore } from '../store';
 import { tobaccosApi, categoriesApi, Tobacco } from '../api';
 import { Card } from '../components/Card';

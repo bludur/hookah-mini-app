@@ -11,6 +11,7 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   icon?: ReactNode;
+  className?: string;
 }
 
 export function Button({
@@ -22,6 +23,7 @@ export function Button({
   disabled = false,
   loading = false,
   icon,
+  className = '',
 }: ButtonProps) {
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all tap-highlight';
   
@@ -55,6 +57,7 @@ export function Button({
         ${sizeStyles[size]}
         ${fullWidth ? 'w-full' : ''}
         ${disabled || loading ? 'opacity-50 cursor-not-allowed' : ''}
+        ${className}
       `}
     >
       {loading ? (

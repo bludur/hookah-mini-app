@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Palette, Sparkles, Candy, Citrus, Leaf, ThumbsUp, ThumbsDown, Star, RefreshCw, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
-import { tobaccosApi, mixesApi, MixGenerateResponse } from '../api';
+import { tobaccosApi, mixesApi } from '../api';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';

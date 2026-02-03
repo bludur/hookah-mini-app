@@ -16,7 +16,7 @@ const roleEmojis: Record<string, string> = {
 };
 
 export function FavoritesPage() {
-  const { favorites, setFavorites, updateMix } = useStore();
+  const { favorites, setFavorites } = useStore();
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMix, setSelectedMix] = useState<Mix | null>(null);
 
