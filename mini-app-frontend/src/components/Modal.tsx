@@ -23,7 +23,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 animate-fade-in"
@@ -31,10 +31,10 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       />
       
       {/* Modal content */}
-      <div className="relative w-full sm:max-w-md bg-tg-bg rounded-t-2xl sm:rounded-2xl animate-slide-up">
+      <div className="relative w-[90%] max-w-sm bg-tg-bg rounded-2xl animate-fade-in shadow-xl">
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-3 py-2 border-b border-tg-secondary-bg">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-tg-secondary-bg">
             <h2 className="text-sm font-semibold text-tg-text">{title}</h2>
             <button
               onClick={onClose}
@@ -46,7 +46,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         )}
         
         {/* Body */}
-        <div className="px-3 py-2">
+        <div className="px-4 py-3">
           {children}
         </div>
       </div>
