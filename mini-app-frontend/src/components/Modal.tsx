@@ -46,7 +46,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         )}
         
         {/* Body */}
-        <div className="px-6 py-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="px-6 py-4 pb-8 overflow-y-auto max-h-[calc(85vh-80px)]">
           {children}
         </div>
       </div>
