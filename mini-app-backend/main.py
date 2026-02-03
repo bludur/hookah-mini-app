@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from typing import List, Optional
+from urllib.parse import unquote
 
 from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -89,11 +90,15 @@ async def get_current_user(
     session: AsyncSession = Depends(get_session),
 ) -> User:
     """Dependency для получения текущего пользователя из заголовков."""
+    # Декодируем URL-encoded значения (для поддержки кириллицы)
+    username = unquote(x_telegram_username) if x_telegram_username else None
+    first_name = unquote(x_telegram_first_name) if x_telegram_first_name else None
+    
     return await get_or_create_user(
         session,
         telegram_id=x_telegram_user_id,
-        username=x_telegram_username,
-        first_name=x_telegram_first_name,
+        username=username,
+        first_name=first_name,
     )
 
 

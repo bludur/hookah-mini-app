@@ -71,8 +71,8 @@ const getHeaders = (): Record<string, string> => {
   
   if (user) {
     headers['X-Telegram-User-Id'] = String(user.id);
-    if (user.username) headers['X-Telegram-Username'] = user.username;
-    if (user.first_name) headers['X-Telegram-First-Name'] = user.first_name;
+    if (user.username) headers['X-Telegram-Username'] = encodeURIComponent(user.username);
+    if (user.first_name) headers['X-Telegram-First-Name'] = encodeURIComponent(user.first_name);
   }
   
   return headers;
