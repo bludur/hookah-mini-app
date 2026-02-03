@@ -31,10 +31,10 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       />
       
       {/* Modal content */}
-      <div className="relative w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl animate-slide-up max-h-[90vh] overflow-hidden">
+      <div className="relative w-full sm:max-w-md bg-tg-bg rounded-t-3xl sm:rounded-3xl animate-slide-up max-h-[70vh] flex flex-col">
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-tg-secondary-bg">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-tg-secondary-bg shrink-0">
             <h2 className="text-lg font-semibold text-tg-text">{title}</h2>
             <button
               onClick={onClose}
@@ -46,7 +46,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         )}
         
         {/* Body */}
-        <div className="px-6 py-4 pb-8 overflow-y-auto max-h-[calc(85vh-80px)]">
+        <div className="px-6 py-4 overflow-y-auto flex-1">
           {children}
         </div>
       </div>
