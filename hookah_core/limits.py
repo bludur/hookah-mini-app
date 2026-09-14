@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 import uuid
+import certifi
 from contextlib import asynccontextmanager
 
 from redis.asyncio import Redis
@@ -39,7 +40,9 @@ return 0
 class GenerationLimiter:
     def __init__(self, config=settings):
         self.config = config
-        self.redis = Redis.from_url(config.redis_url.get_secret_value(), socket_timeout=3, socket_connect_timeout=3) if config.redis_url.get_secret_value() else None
+        redis_url = config.redis_url.get_secret_value()
+        tls = {'ssl_ca_certs': certifi.where(), 'ssl_check_hostname': True} if redis_url.startswith('rediss://') else {}
+        self.redis = Redis.from_url(redis_url, socket_timeout=3, socket_connect_timeout=3, **tls) if redis_url else None
         self._lock = asyncio.Lock()
         self._active: dict[int, float] = {}
         self._counts: dict[tuple, tuple[int, float]] = {}

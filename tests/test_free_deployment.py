@@ -9,6 +9,18 @@ from hookah_core.errors import GenerationUnavailable
 from hookah_core.llm import LLMService
 
 
+async def test_redis_tls_checks_hostname_and_trusted_roots():
+    import certifi
+    from hookah_core.limits import GenerationLimiter
+    limiter = GenerationLimiter(Settings(_env_file=None, redis_url='rediss://default:test@example.invalid:6379'))
+    try:
+        options = limiter.redis.connection_pool.connection_kwargs
+        assert options['ssl_check_hostname'] is True
+        assert options['ssl_ca_certs'] == certifi.where()
+    finally:
+        await limiter.close()
+
+
 async def test_neon_tls_uses_system_roots_with_hostname_verification(monkeypatch):
     import ssl
     import hookah_core.database as database
