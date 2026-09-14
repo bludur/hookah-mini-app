@@ -38,6 +38,8 @@ async def test_group_launcher_does_not_enter_private_handlers():
 
 
 async def test_webhook_auth_and_public_reply(api, monkeypatch):
+    sender = AsyncMock()
+    monkeypatch.setattr(api_module, 'send_launch_reply', sender)
     cache = AsyncMock(return_value=True)
     monkeypatch.setattr(api_module.share_store, 'call', cache)
     payload = {'update_id': 42, 'message': message().model_dump(mode='json', by_alias=True)}
@@ -46,11 +48,27 @@ async def test_webhook_auth_and_public_reply(api, monkeypatch):
     headers = {'X-Telegram-Bot-Api-Secret-Token': webhook_secret()}
     response = await api.post('/telegram/launcher', json=payload, headers=headers)
     assert response.status_code == 200
-    assert response.json()['method'] == 'sendMessage'
-    assert response.json()['chat_id'] == -123
+    assert response.json() == {'ok': True}
+    assert sender.call_args.args[0]['chat_id'] == -123
     cache.return_value = False
     assert (await api.post('/telegram/launcher', json=payload, headers=headers)).json() == {'ok': True}
     payload['message'] = message('/collection').model_dump(mode='json', by_alias=True)
     cache.reset_mock()
     assert (await api.post('/telegram/launcher', json=payload, headers=headers)).json() == {'ok': True}
     cache.assert_not_awaited()
+
+
+def test_anonymous_group_admin_can_open_app():
+    event = message().model_copy(update={'sender_chat': message().chat, 'from_user': message().from_user.model_copy(update={'is_bot': True})})
+    assert launch_reply(event, 'dimon_hookah_mix_bot') is not None
+
+
+async def test_delivery_failure_allows_retry(api, monkeypatch):
+    from hookah_core.errors import DomainError
+    cache = AsyncMock(return_value=True)
+    monkeypatch.setattr(api_module.share_store, 'call', cache)
+    monkeypatch.setattr(api_module, 'send_launch_reply', AsyncMock(side_effect=DomainError('Failed', 503)))
+    result = await api.post('/telegram/launcher', json={'update_id': 51, 'message': message().model_dump(mode='json', by_alias=True)},
+                            headers={'X-Telegram-Bot-Api-Secret-Token': webhook_secret()})
+    assert result.status_code == 503
+    assert cache.call_args.args[0] == 'delete'

@@ -23,7 +23,7 @@ from hookah_core.photos import PhotoRequest, PhotoResult, MAX_UPLOAD_BODY, photo
 from hookah_core.models import User, Category, Tobacco, Mix
 from hookah_core import services
 from hookah_core.sharing import ShareCreate, ShareOpen, share_store
-from bot.launcher import launch_reply, webhook_secret
+from bot.launcher import launch_reply, webhook_secret, send_launch_reply
 from aiogram.types import Update
 from schemas import (UserResponse, CategoryResponse, TobaccoCreate, TobaccoUpdate, TobaccoResponse,
                      TobaccoBulkCreate, TobaccoBulkResponse, MixResponse, MixGenerateRequest,
@@ -69,11 +69,19 @@ async def telegram_launcher(request: Request):
     # Authenticated updates only. Bound retries and command spam in shared Redis.
     bot_id = settings.bot_token.get_secret_value().split(':', 1)[0]
     prefix = f'hookah:{settings.app_env}:{bot_id}:launcher'
-    if not await share_store.call('set', f'{prefix}:update:{event.update_id}', '1', nx=True, ex=300):
+    update_key = f'{prefix}:update:{event.update_id}'
+    if not await share_store.call('set', update_key, '1', nx=True, ex=300):
         return {'ok': True}
-    if not await share_store.call('set', f'{prefix}:chat:{event.message.chat.id}', '1', nx=True, ex=5):
+    chat_key = f'{prefix}:chat:{event.message.chat.id}'
+    if not await share_store.call('set', chat_key, str(event.update_id), nx=True, ex=10):
         return {'ok': True}
-    return {'method': 'sendMessage', **reply}
+    try:
+        await send_launch_reply(reply)
+    except Exception:
+        await share_store.call('eval', "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0", 1, chat_key, str(event.update_id))
+        await share_store.call('delete', update_key)
+        raise
+    return {'ok': True}
 
 
 class RequestBoundary:
