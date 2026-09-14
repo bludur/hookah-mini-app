@@ -1,4 +1,9 @@
 from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.types import Message, InlineKeyboardButton
+from hookah_core import services
+from hookah_core.schemas import MixGenerateRequest
+from bot.security import escape_md, CommandView
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -9,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from bot.database.models import Mix, Tobacco, User
 from bot.database.utils import get_or_create_user
 from bot.keyboards.menus import back_to_menu, confirm_delete_all_menu, favorites_menu, mix_menu, mix_rating_menu
-from bot.services.llm_service import llm_service
 
 router = Router()
 
@@ -22,6 +26,12 @@ def get_role_emoji(role: str) -> str:
         "акцент": "🟡",
     }
     return roles.get(role, "⚪")
+
+
+@router.message(Command('mix'))
+async def cmd_mix(message: Message, state: FSMContext, session: AsyncSession):
+    await state.clear()
+    await show_mix_menu(CommandView(message), session)
 
 
 # ============ МЕНЮ МИКСОВ ============
@@ -118,7 +128,7 @@ async def generate_mix_by_tobacco(
 
     # Получаем выбранный табак
     result = await session.execute(
-        select(Tobacco).where(Tobacco.id == tobacco_id)
+        select(Tobacco).where(Tobacco.id == tobacco_id, Tobacco.user.has(User.telegram_id == callback.from_user.id))
     )
     base_tobacco = result.scalar_one_or_none()
 
@@ -235,113 +245,17 @@ async def _generate_mix(
     taste_profile: str = None,
 ) -> None:
     """Общая функция генерации микса."""
-    try:
-        # Получаем или создаём пользователя
-        user = await get_or_create_user(
-            session,
-            telegram_id=callback.from_user.id,
-            username=callback.from_user.username,
-            first_name=callback.from_user.first_name,
-        )
-
-        # Получаем табаки с категориями
-        result = await session.execute(
-            select(Tobacco)
-            .where(Tobacco.user_id == user.id)
-            .options(selectinload(Tobacco.category))
-        )
-        tobaccos = result.scalars().all()
-
-        if len(tobaccos) < 2:
-            await callback.message.edit_text(
-                "⚠️ Нужно минимум 2 табака для микса",
-                reply_markup=back_to_menu(),
-            )
-            await callback.answer()
-            return
-
-        # Формируем данные табаков
-        tobaccos_data = [
-            {
-                "name": t.name,
-                "brand": t.brand,
-                "category": t.category.name if t.category else None,
-            }
-            for t in tobaccos
-        ]
-
-        # Получаем историю оценок
-        result = await session.execute(
-            select(Mix)
-            .where(Mix.user_id == user.id)
-            .where(Mix.rating.isnot(None))
-        )
-        rated_mixes = result.scalars().all()
-        liked = [m.name for m in rated_mixes if m.rating == 1]
-        disliked = [m.name for m in rated_mixes if m.rating == -1]
-
-        # Получаем последние миксы для исключения повторений
-        result = await session.execute(
-            select(Mix)
-            .where(Mix.user_id == user.id)
-            .order_by(Mix.created_at.desc())
-            .limit(10)
-        )
-        recent_mixes = result.scalars().all()
-        previous_names = [m.name for m in recent_mixes]
-
-        # Генерируем микс
-        recommendation = await llm_service.generate_mix(
-            tobaccos=tobaccos_data,
-            request_type=request_type,
-            base_tobacco=base_tobacco,
-            taste_profile=taste_profile,
-            liked_mixes=liked if liked else None,
-            disliked_mixes=disliked if disliked else None,
-            previous_mixes=previous_names if previous_names else None,
-        )
-
-        # Сохраняем микс в БД
-        components_dict = {
-            c.tobacco: {"portion": c.portion, "role": c.role}
-            for c in recommendation.components
-        }
-
-        mix = Mix(
-            user_id=user.id,
-            name=recommendation.name,
-            components=components_dict,
-            description=recommendation.description,
-            tips=recommendation.tips,
-            request_type=request_type,
-        )
-        session.add(mix)
-        await session.commit()
-        await session.refresh(mix)
-
-        # Формируем текст ответа
-        components_text = "\n".join(
-            f"{get_role_emoji(c.role)} {c.tobacco} — *{c.portion}%* ({c.role})"
-            for c in recommendation.components
-        )
-
-        await callback.message.edit_text(
-            f"🎨 *{recommendation.name}*\n\n"
-            f"📋 *Состав:*\n{components_text}\n\n"
-            f"📝 *Описание:*\n{recommendation.description}\n\n"
-            f"💡 *Совет:*\n{recommendation.tips}",
-            parse_mode="Markdown",
-            reply_markup=mix_rating_menu(mix.id),
-        )
-
-    except Exception as e:
-        await callback.message.edit_text(
-            f"❌ *Ошибка генерации*\n\n{str(e)}",
-            parse_mode="Markdown",
-            reply_markup=back_to_menu(),
-        )
-
     await callback.answer()
+    user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.first_name)
+    data = MixGenerateRequest(request_type=request_type, base_tobacco=base_tobacco, taste_profile=taste_profile)
+    mix, recommendation = await services.generate_mix(session, user, data)
+    components_text = '\n'.join(
+        f'{get_role_emoji(c.role)} {escape_md(c.tobacco)} — *{c.portion}%* ({c.role})'
+        for c in recommendation.components)
+    await callback.message.edit_text(
+        f'🎨 *{escape_md(recommendation.name)}*\n\n📋 *Состав:*\n{components_text}\n\n'
+        f'📝 {escape_md(recommendation.description)}\n\n💡 {escape_md(recommendation.tips)}',
+        parse_mode='Markdown', reply_markup=mix_rating_menu(mix.id))
 
 
 # ============ ОЦЕНКА И ИЗБРАННОЕ ============
@@ -352,12 +266,18 @@ async def rate_mix(callback: CallbackQuery, session: AsyncSession) -> None:
     parts = callback.data.split(":")
     mix_id = int(parts[1])
     rating = int(parts[2])
+    if rating not in (-1, 0, 1):
+        await callback.answer("Недопустимая оценка", show_alert=True)
+        return
 
     result = await session.execute(
-        select(Mix).where(Mix.id == mix_id)
+        select(Mix).where(Mix.id == mix_id, Mix.user.has(User.telegram_id == callback.from_user.id))
     )
     mix = result.scalar_one_or_none()
 
+    if not mix:
+        await callback.answer("Микс не найден", show_alert=True)
+        return
     if mix:
         mix.rating = rating
         await session.commit()
@@ -374,7 +294,7 @@ async def favorite_mix(callback: CallbackQuery, session: AsyncSession) -> None:
     mix_id = int(callback.data.split(":")[1])
 
     result = await session.execute(
-        select(Mix).where(Mix.id == mix_id)
+        select(Mix).where(Mix.id == mix_id, Mix.user.has(User.telegram_id == callback.from_user.id))
     )
     mix = result.scalar_one_or_none()
 
@@ -427,7 +347,7 @@ async def show_history(callback: CallbackQuery, session: AsyncSession) -> None:
                 rating = " 👎"
             if mix.is_favorite:
                 rating += " ⭐"
-            lines.append(f"• {mix.name}{rating}")
+            lines.append(f"• {escape_md(mix.name)}{rating}")
 
         await callback.message.edit_text(
             "📜 *История миксов*\n\n" + "\n".join(lines),
@@ -437,9 +357,10 @@ async def show_history(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "favorites")
+@router.callback_query((F.data == "favorites") | F.data.startswith("favorites_page:"))
 async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None:
     """Показывает избранные миксы."""
+    page = max(0, int(callback.data.split(":")[1])) if ":" in callback.data else 0
     user = await get_or_create_user(
         session,
         telegram_id=callback.from_user.id,
@@ -451,10 +372,17 @@ async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None
         select(Mix)
         .where(Mix.user_id == user.id)
         .where(Mix.is_favorite == True)
-        .order_by(Mix.created_at.desc())
+        .order_by(Mix.created_at.desc(), Mix.id.desc()).limit(6).offset(page * 5)
     )
-    mixes = result.scalars().all()
+    mixes = list(result.scalars().all())
+    has_more = len(mixes) > 5
+    mixes = mixes[:5]
 
+    builder = InlineKeyboardBuilder.from_markup(favorites_menu(has_favorites=bool(mixes)))
+    if page > 0:
+        builder.row(InlineKeyboardButton(text='Назад', callback_data=f'favorites_page:{page - 1}'))
+    if has_more:
+        builder.row(InlineKeyboardButton(text='Далее', callback_data=f'favorites_page:{page + 1}'))
     if not mixes:
         await callback.message.edit_text(
             "⭐ *Избранное пусто*\n\n"
@@ -466,15 +394,15 @@ async def show_favorites(callback: CallbackQuery, session: AsyncSession) -> None
         text = "⭐ *Избранные миксы*\n\n"
         for mix in mixes:
             components = ", ".join(
-                f"{name} {data['portion']}%"
+                f"{escape_md(name)} {data['portion']}%"
                 for name, data in mix.components.items()
             )
-            text += f"🎨 *{mix.name}*\n{components}\n\n"
+            text += f"🎨 *{escape_md(mix.name)}*\n{components}\n\n"
 
         await callback.message.edit_text(
             text,
             parse_mode="Markdown",
-            reply_markup=favorites_menu(has_favorites=True),
+            reply_markup=builder.as_markup(),
         )
     await callback.answer()
 

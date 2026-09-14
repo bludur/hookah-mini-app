@@ -1,3 +1,4 @@
+import { ErrorState } from '../components/ErrorState';
 import { useState, useEffect } from 'react';
 import { Palette, Sparkles, Candy, Citrus, Leaf, ThumbsUp, ThumbsDown, Star, RefreshCw, AlertCircle } from 'lucide-react';
 import { useStore } from '../store';
@@ -22,6 +23,7 @@ const roleEmojis: Record<string, string> = {
 
 export function MixPage() {
   const { tobaccos, setTobaccos, currentMix, setCurrentMix } = useStore();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +38,12 @@ export function MixPage() {
 
   const loadTobaccos = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await tobaccosApi.getAll();
       setTobaccos(data);
     } catch (err) {
-      console.error('Failed to load tobaccos:', err);
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить коллекцию.');
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +82,7 @@ export function MixPage() {
       await mixesApi.rate(currentMix.id, rating);
       hapticFeedback.success();
     } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить действие.');
       hapticFeedback.error();
     }
   };
@@ -91,6 +95,7 @@ export function MixPage() {
       await mixesApi.toggleFavorite(currentMix.id, true);
       hapticFeedback.success();
     } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить действие.');
       hapticFeedback.error();
     }
   };
@@ -99,6 +104,8 @@ export function MixPage() {
     hapticFeedback.light();
     generateMix('surprise');
   };
+
+  if (loadError) return <ErrorState message={loadError} onRetry={loadTobaccos} />;
 
   if (isLoading) {
     return <Loader text="Загрузка..." />;
@@ -131,7 +138,7 @@ export function MixPage() {
             {showBaseSelector ? (
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {tobaccos.slice(0, 10).map((t) => (
+                  {tobaccos.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => {

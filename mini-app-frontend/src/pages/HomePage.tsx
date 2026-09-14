@@ -1,27 +1,31 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Package, Palette, Star, ChevronRight, Cigarette } from 'lucide-react';
 import { useStore } from '../store';
 import { userApi } from '../api';
+import { ErrorState } from '../components/ErrorState';
 import { Card } from '../components/Card';
-import { hapticFeedback, getTelegramUser, getMockUser, isTelegramWebApp } from '../telegram';
+import { hapticFeedback, getTelegramUser } from '../telegram';
 
 export function HomePage() {
   const { stats, setStats, setCurrentTab, tobaccos } = useStore();
+
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadStats();
   }, [tobaccos.length]);
 
   const loadStats = async () => {
+    setError(null);
     try {
       const data = await userApi.getStats();
       setStats(data);
     } catch (err) {
-      console.error('Failed to load stats:', err);
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить статистику.');
     }
   };
 
-  const user = isTelegramWebApp() ? getTelegramUser() : getMockUser();
+  const user = getTelegramUser();
   const firstName = user?.first_name || 'друг';
 
   const quickActions = [
@@ -55,6 +59,8 @@ export function HomePage() {
     hapticFeedback.light();
     setCurrentTab(tab);
   };
+
+  if (error) return <ErrorState message={error} onRetry={loadStats} />;
 
   return (
     <div className="min-h-screen pb-20 px-4 pt-4">

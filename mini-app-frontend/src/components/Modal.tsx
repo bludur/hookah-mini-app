@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -9,35 +9,39 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return;
+    const element = dialog.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    element?.showModal();
     return () => {
-      document.body.style.overflow = '';
+      element?.close();
+      document.body.style.overflow = previousOverflow;
     };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 animate-fade-in"
-        onClick={onClose}
-      />
-      
-      {/* Modal content */}
-      <div className="relative w-[90%] max-w-sm bg-tg-bg rounded-2xl animate-fade-in shadow-xl">
+    <dialog
+      ref={dialog}
+      aria-labelledby={title ? titleId : undefined}
+      aria-label={title ? undefined : 'Диалог'}
+      onCancel={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      className="m-auto p-0 w-[90%] max-w-sm rounded-2xl bg-tg-bg text-tg-text shadow-xl backdrop:bg-black/50 open:flex open:flex-col"
+      style={{ maxHeight: 'calc(var(--tg-viewport-stable-height, 100dvh) - 2rem)' }}
+    >
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-4 py-2 border-b border-tg-secondary-bg">
-            <h2 className="text-sm font-semibold text-tg-text">{title}</h2>
+          <div className="flex shrink-0 items-center justify-between px-4 py-2 border-b border-tg-secondary-bg">
+            <h2 id={titleId} className="text-sm font-semibold text-tg-text">{title}</h2>
             <button
               onClick={onClose}
+              aria-label="Закрыть"
               className="p-1 -mr-1 rounded-full hover:bg-tg-secondary-bg transition-colors tap-highlight"
             >
               <X className="w-4 h-4 text-tg-hint" />
@@ -46,10 +50,9 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         )}
         
         {/* Body */}
-        <div className="px-4 py-3">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
           {children}
         </div>
-      </div>
-    </div>
+    </dialog>
   );
 }

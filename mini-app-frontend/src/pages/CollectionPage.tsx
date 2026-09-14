@@ -1,3 +1,4 @@
+import { ErrorState } from '../components/ErrorState';
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, Package, ListPlus } from 'lucide-react';
 import { useStore } from '../store';
@@ -12,6 +13,7 @@ import { hapticFeedback, showConfirm } from '../telegram';
 
 export function CollectionPage() {
   const { tobaccos, setTobaccos, addTobacco, removeTobacco, categories, setCategories } = useStore();
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -20,6 +22,7 @@ export function CollectionPage() {
   const [selectedTobacco, setSelectedTobacco] = useState<Tobacco | null>(null);
 
   // Form state
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [newName, setNewName] = useState('');
   const [newBrand, setNewBrand] = useState('');
   const [newCategoryId, setNewCategoryId] = useState<number | null>(null);
@@ -32,6 +35,7 @@ export function CollectionPage() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [tobaccosData, categoriesData] = await Promise.all([
         tobaccosApi.getAll(),
@@ -40,7 +44,7 @@ export function CollectionPage() {
       setTobaccos(tobaccosData);
       setCategories(categoriesData);
     } catch (err) {
-      console.error('Failed to load data:', err);
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные.');
     } finally {
       setIsLoading(false);
     }
@@ -51,12 +55,15 @@ export function CollectionPage() {
     
     setIsSubmitting(true);
     try {
-      const tobacco = await tobaccosApi.create({
+      const tobacco = editingId ? await tobaccosApi.update(editingId, {
+        name: newName.trim(), brand: newBrand.trim() || null, category_id: newCategoryId,
+      }) : await tobaccosApi.create({
         name: newName.trim(),
         brand: newBrand.trim() || undefined,
         category_id: newCategoryId || undefined,
       });
-      addTobacco(tobacco);
+      if (editingId) setTobaccos(tobaccos.map(item => item.id === editingId ? tobacco : item).sort((a, b) => a.name.localeCompare(b.name)));
+      else addTobacco(tobacco);
       hapticFeedback.success();
       setShowAddModal(false);
       resetForm();
@@ -121,6 +128,7 @@ export function CollectionPage() {
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setNewName('');
     setNewBrand('');
     setNewCategoryId(null);
@@ -136,6 +144,8 @@ export function CollectionPage() {
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (t.brand && t.brand.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loadError) return <ErrorState message={loadError} onRetry={loadData} />;
 
   if (isLoading) {
     return <Loader text="Загрузка коллекции..." />;
@@ -234,12 +244,15 @@ export function CollectionPage() {
           setShowAddModal(false);
           resetForm();
         }}
-        title="Добавить табак"
+        title={editingId ? "Изменить табак" : "Добавить табак"}
       >
         <div className="space-y-2">
           <div className="flex gap-2">
             <div className="flex-1">
               <Input
+                aria-label="Название"
+                minLength={2}
+                maxLength={100}
                 placeholder="Название"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -247,6 +260,8 @@ export function CollectionPage() {
             </div>
             <div className="w-28">
               <Input
+                aria-label="Бренд"
+                maxLength={100}
                 placeholder="Бренд"
                 value={newBrand}
                 onChange={(e) => setNewBrand(e.target.value)}
@@ -254,6 +269,7 @@ export function CollectionPage() {
             </div>
           </div>
           <select
+            aria-label="Категория"
             value={newCategoryId || ''}
             onChange={(e) => {
               hapticFeedback.selection();
@@ -272,10 +288,10 @@ export function CollectionPage() {
             fullWidth
             onClick={handleAddTobacco}
             loading={isSubmitting}
-            disabled={!newName.trim()}
+            disabled={newName.trim().length < 2}
             size="sm"
           >
-            Добавить
+            {editingId ? "Сохранить" : "Добавить"}
           </Button>
         </div>
       </Modal>
@@ -352,6 +368,15 @@ export function CollectionPage() {
                 </span>
               </div>
             </div>
+
+            <Button fullWidth variant="secondary" onClick={() => {
+              setEditingId(selectedTobacco.id);
+              setNewName(selectedTobacco.name);
+              setNewBrand(selectedTobacco.brand || '');
+              setNewCategoryId(selectedTobacco.category_id);
+              setShowTobaccoModal(false);
+              setShowAddModal(true);
+            }}>Изменить</Button>
 
             <Button
               fullWidth

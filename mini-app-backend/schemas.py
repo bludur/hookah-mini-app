@@ -1,134 +1,78 @@
-from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from hookah_core.schemas import TobaccoCreate, TobaccoUpdate, MixGenerateRequest, MixComponent, MixRecommendation, InputModel
 
 
-# ============ USER SCHEMAS ============
+class ResponseModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-class UserBase(BaseModel):
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: Optional[str] = None
-
-
-class UserCreate(UserBase):
-    pass
+    @field_serializer('created_at', check_fields=False)
+    def utc_timestamp(self, value: datetime):
+        return value.replace(tzinfo=timezone.utc).isoformat() if value.tzinfo is None else value.isoformat()
 
 
-class UserResponse(UserBase):
+class UserResponse(ResponseModel):
     id: int
+    telegram_id: int
+    username: str | None
+    first_name: str | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
-
-# ============ CATEGORY SCHEMAS ============
-
-class CategoryResponse(BaseModel):
+class CategoryResponse(ResponseModel):
     id: int
     name: str
     emoji: str
     taste_profile: str
 
-    class Config:
-        from_attributes = True
 
-
-# ============ TOBACCO SCHEMAS ============
-
-class TobaccoBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=100)
-    brand: Optional[str] = None
-    category_id: Optional[int] = None
-    notes: Optional[str] = None
-
-
-class TobaccoCreate(TobaccoBase):
-    pass
-
-
-class TobaccoBulkCreate(BaseModel):
-    tobaccos: List[TobaccoCreate]
-
-
-class TobaccoUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=100)
-    brand: Optional[str] = None
-    category_id: Optional[int] = None
-    notes: Optional[str] = None
-
-
-class TobaccoResponse(TobaccoBase):
+class TobaccoResponse(ResponseModel):
     id: int
     user_id: int
+    name: str
+    brand: str | None
+    category_id: int | None
+    notes: str | None
     created_at: datetime
-    category: Optional[CategoryResponse] = None
+    category: CategoryResponse | None
 
-    class Config:
-        from_attributes = True
+
+class TobaccoBulkCreate(InputModel):
+    tobaccos: list[dict[str, Any]] = Field(min_length=1, max_length=100)
 
 
 class TobaccoBulkResponse(BaseModel):
-    added: List[str]
-    skipped: List[str]
-    errors: List[str]
+    added: list[str]
+    skipped: list[str]
+    errors: list[str]
 
 
-# ============ MIX SCHEMAS ============
-
-class MixComponent(BaseModel):
-    tobacco: str
-    portion: int
-    role: str
-
-
-class MixBase(BaseModel):
-    name: str
-    components: Dict[str, Any]  # {"tobacco_name": {"portion": int, "role": str}}
-    description: Optional[str] = None
-    tips: Optional[str] = None
-    request_type: str
-
-
-class MixCreate(MixBase):
-    pass
-
-
-class MixResponse(MixBase):
+class MixResponse(ResponseModel):
     id: int
     user_id: int
-    rating: Optional[int] = None
-    is_favorite: bool = False
+    name: str
+    components: dict[str, Any]
+    description: str | None
+    tips: str | None
+    request_type: str
+    rating: int | None
+    is_favorite: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
 
-
-class MixGenerateRequest(BaseModel):
-    request_type: str = Field(..., pattern="^(base|profile|surprise)$")
-    base_tobacco: Optional[str] = None
-    taste_profile: Optional[str] = None
-
-
-class MixGenerateResponse(BaseModel):
+class MixGenerateResponse(MixRecommendation):
     id: int
-    name: str
-    components: List[MixComponent]
-    description: str
-    tips: str
 
 
-class MixRateRequest(BaseModel):
-    rating: int = Field(..., ge=-1, le=1)
+class MixRateRequest(InputModel):
+    rating: int = Field(strict=True, ge=-1, le=1)
 
 
-class MixFavoriteRequest(BaseModel):
-    is_favorite: bool
+class MixFavoriteRequest(InputModel):
+    is_favorite: bool = Field(strict=True)
 
-
-# ============ STATS SCHEMAS ============
 
 class StatsResponse(BaseModel):
     tobaccos_count: int

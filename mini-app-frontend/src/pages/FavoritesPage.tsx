@@ -1,3 +1,4 @@
+import { ErrorState } from '../components/ErrorState';
 import { useState, useEffect } from 'react';
 import { Star, Trash2 } from 'lucide-react';
 import { useStore } from '../store';
@@ -17,6 +18,10 @@ const roleEmojis: Record<string, string> = {
 
 export function FavoritesPage() {
   const { favorites, setFavorites } = useStore();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMix, setSelectedMix] = useState<Mix | null>(null);
 
@@ -26,11 +31,14 @@ export function FavoritesPage() {
 
   const loadFavorites = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await mixesApi.getFavorites();
       setFavorites(data);
+      setHasMore(data.length === 20);
+      setMoreError(null);
     } catch (err) {
-      console.error('Failed to load favorites:', err);
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные.');
     } finally {
       setIsLoading(false);
     }
@@ -46,6 +54,7 @@ export function FavoritesPage() {
       hapticFeedback.success();
       setSelectedMix(null);
     } catch (err) {
+      setMoreError(err instanceof Error ? err.message : 'Не удалось выполнить действие.');
       hapticFeedback.error();
     }
   };
@@ -57,11 +66,30 @@ export function FavoritesPage() {
     try {
       await mixesApi.clearFavorites();
       setFavorites([]);
+      setHasMore(false);
       hapticFeedback.success();
     } catch (err) {
+      setMoreError(err instanceof Error ? err.message : 'Не удалось выполнить действие.');
       hapticFeedback.error();
     }
   };
+
+  const loadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const next = await mixesApi.getFavorites(20, favorites.length);
+      setFavorites([...favorites, ...next.filter(item => !favorites.some(existing => existing.id === item.id))]);
+      setHasMore(next.length === 20);
+    } catch (err) {
+      setMoreError(err instanceof Error ? err.message : 'Не удалось загрузить данные.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  if (loadError) return <ErrorState message={loadError} onRetry={loadFavorites} />;
 
   if (isLoading) {
     return <Loader text="Загрузка избранного..." />;
@@ -123,6 +151,11 @@ export function FavoritesPage() {
       )}
 
       {/* Mix Details Modal */}
+      {moreError && <p role="alert" className="mt-4 text-red-600">{moreError}</p>}
+      {hasMore && <button className="mt-4 p-3 w-full text-tg-link" disabled={loadingMore} onClick={loadMore}>
+        {loadingMore ? 'Загрузка...' : 'Загрузить ещё'}
+      </button>}
+
       <Modal
         isOpen={!!selectedMix}
         onClose={() => setSelectedMix(null)}

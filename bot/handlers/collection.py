@@ -1,4 +1,9 @@
 from aiogram import F, Router
+from aiogram.filters import Command
+from hookah_core import services
+from hookah_core.schemas import TobaccoCreate, TobaccoUpdate
+from hookah_core.errors import DomainError
+from bot.security import escape_md, CommandView
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
@@ -33,6 +38,18 @@ class AddTobaccoStates(StatesGroup):
 class DeleteTobaccoStates(StatesGroup):
     """Состояния для удаления табаков."""
     selecting = State()  # Выбор табаков для удаления
+
+
+@router.message(Command('collection'))
+async def cmd_collection(message: Message, state: FSMContext, session: AsyncSession):
+    await state.clear()
+    await show_collection(CommandView(message), session)
+
+
+@router.message(Command('add'))
+async def cmd_add(message: Message, state: FSMContext):
+    await state.clear()
+    await start_add_tobacco(CommandView(message), state)
 
 
 # ============ ПРОСМОТР КОЛЛЕКЦИИ ============
@@ -107,7 +124,7 @@ async def show_tobacco(callback: CallbackQuery, session: AsyncSession) -> None:
 
     result = await session.execute(
         select(Tobacco)
-        .where(Tobacco.id == tobacco_id)
+        .where(Tobacco.id == tobacco_id, Tobacco.user.has(User.telegram_id == callback.from_user.id))
         .options(selectinload(Tobacco.category))
     )
     tobacco = result.scalar_one_or_none()
@@ -122,9 +139,9 @@ async def show_tobacco(callback: CallbackQuery, session: AsyncSession) -> None:
     date = tobacco.created_at.strftime("%d.%m.%Y")
 
     await callback.message.edit_text(
-        f"{emoji} *{tobacco.name}*\n\n"
-        f"🏷 Бренд: {brand}\n"
-        f"📁 Категория: {category_name}\n"
+        f"{emoji} *{escape_md(tobacco.name)}*\n\n"
+        f"🏷 Бренд: {escape_md(brand)}\n"
+        f"📁 Категория: {escape_md(category_name)}\n"
         f"📅 Добавлен: {date}",
         parse_mode="Markdown",
         reply_markup=tobacco_detail_menu(tobacco_id),
@@ -146,10 +163,10 @@ async def start_add_tobacco(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(AddTobaccoStates.waiting_name)
+@router.message(F.text, ~F.text.startswith("/"), AddTobaccoStates.waiting_name)
 async def process_name(message: Message, state: FSMContext) -> None:
     """Обрабатывает название табака."""
-    name = message.text.strip()
+    name = (message.text or "").strip()
 
     # Валидация
     if len(name) < 2 or len(name) > 100:
@@ -193,10 +210,13 @@ async def skip_brand(callback: CallbackQuery, state: FSMContext, session: AsyncS
     await callback.answer()
 
 
-@router.message(AddTobaccoStates.waiting_brand)
+@router.message(F.text, ~F.text.startswith("/"), AddTobaccoStates.waiting_brand)
 async def process_brand(message: Message, state: FSMContext, session: AsyncSession) -> None:
     """Обрабатывает бренд табака."""
-    brand = message.text.strip()
+    brand = (message.text or "").strip()
+    if len(brand) > 100:
+        await message.answer("Бренд должен быть не длиннее 100 символов.")
+        return
     await state.update_data(brand=brand)
     await state.set_state(AddTobaccoStates.waiting_category)
 
@@ -232,41 +252,16 @@ async def process_category(callback: CallbackQuery, state: FSMContext, session: 
         first_name=callback.from_user.first_name,
     )
 
-    # Проверяем уникальность названия
-    result = await session.execute(
-        select(Tobacco)
-        .where(Tobacco.user_id == user.id)
-        .where(Tobacco.name.ilike(name))
-    )
-    existing = result.scalar_one_or_none()
-
-    if existing:
-        await state.clear()
-        await callback.message.edit_text(
-            f"⚠️ *Табак «{name}» уже есть в коллекции!*",
-            parse_mode="Markdown",
-            reply_markup=back_to_menu(),
-        )
-        await callback.answer()
-        return
-
-    # Создаём табак
-    tobacco = Tobacco(
-        user_id=user.id,
-        name=name,
-        brand=brand,
-        category_id=category_id,
-    )
-    session.add(tobacco)
-    await session.commit()
+    await services.create_tobacco(session, user.id, TobaccoCreate(
+        name=name, brand=brand, category_id=category_id))
 
     # Очищаем state
     await state.clear()
 
-    brand_text = f"🏷 {brand}" if brand else ""
+    brand_text = f"🏷 {escape_md(brand)}" if brand else ""
     await callback.message.edit_text(
         f"✅ *Табак добавлен!*\n\n"
-        f"🟢 *{name}*\n"
+        f"🟢 *{escape_md(name)}*\n"
         f"{brand_text}",
         parse_mode="Markdown",
         reply_markup=back_to_menu(),
@@ -300,10 +295,10 @@ async def start_add_tobacco_bulk(callback: CallbackQuery, state: FSMContext) -> 
     await callback.answer()
 
 
-@router.message(AddTobaccoStates.waiting_bulk)
+@router.message(F.text, ~F.text.startswith("/"), AddTobaccoStates.waiting_bulk)
 async def process_bulk_tobaccos(message: Message, state: FSMContext, session: AsyncSession) -> None:
     """Обрабатывает список табаков."""
-    lines = [line.strip() for line in message.text.strip().split("\n") if line.strip()]
+    lines = [line.strip() for line in (message.text or "").strip().split("\n") if line.strip()]
     
     if not lines:
         await message.answer(
@@ -324,44 +319,18 @@ async def process_bulk_tobaccos(message: Message, state: FSMContext, session: As
     result = await session.execute(select(Category))
     categories = {c.name.lower(): c.id for c in result.scalars().all()}
     
-    # Получаем существующие табаки пользователя для проверки дубликатов
-    result = await session.execute(
-        select(Tobacco.name).where(Tobacco.user_id == user.id)
-    )
-    existing_names = {name.lower() for name in result.scalars().all()}
-    
-    added = []
-    skipped = []
-    errors = []
-    
+    rows = []
     for line in lines:
-        parts = [p.strip() for p in line.split("|")]
-        name = parts[0] if parts else ""
-        
-        if len(name) < 2:
-            errors.append(f"• `{line}` — слишком короткое название")
-            continue
-        
-        # Проверяем дубликат
-        if name.lower() in existing_names:
-            skipped.append(f"• {name}")
-            continue
-        
-        brand = parts[1] if len(parts) > 1 else None
-        category_name = parts[2].lower() if len(parts) > 2 else None
-        category_id = categories.get(category_name) if category_name else None
-        
-        tobacco = Tobacco(
-            user_id=user.id,
-            name=name,
-            brand=brand,
-            category_id=category_id,
-        )
-        session.add(tobacco)
-        existing_names.add(name.lower())  # Добавляем в набор чтобы избежать дублей в одном списке
-        added.append(f"• {name}" + (f" ({brand})" if brand else ""))
-    
-    await session.commit()
+        parts = [part.strip() for part in line.split('|')]
+        category_id = None
+        if len(parts) > 2 and parts[2]:
+            category_id = categories.get(parts[2].lower(), -1)
+        rows.append({'name': parts[0], 'brand': parts[1] if len(parts) > 1 else None,
+                     'category_id': category_id})
+    result = await services.bulk_tobaccos(session, user.id, rows)
+    added = [escape_md(name) for name in result['added']]
+    skipped = [escape_md(name) for name in result['skipped']]
+    errors = result['errors']
     await state.clear()
     
     # Формируем ответ
@@ -394,7 +363,7 @@ async def confirm_delete(callback: CallbackQuery, session: AsyncSession) -> None
     tobacco_id = int(callback.data.split(":")[1])
 
     result = await session.execute(
-        select(Tobacco).where(Tobacco.id == tobacco_id)
+        select(Tobacco).where(Tobacco.id == tobacco_id, Tobacco.user.has(User.telegram_id == callback.from_user.id))
     )
     tobacco = result.scalar_one_or_none()
 
@@ -404,7 +373,7 @@ async def confirm_delete(callback: CallbackQuery, session: AsyncSession) -> None
 
     await callback.message.edit_text(
         f"🗑 *Удалить табак?*\n\n"
-        f"*{tobacco.name}*\n\n"
+        f"*{escape_md(tobacco.name)}*\n\n"
         "Это нельзя отменить.",
         parse_mode="Markdown",
         reply_markup=confirm_delete_menu(tobacco_id),
@@ -418,7 +387,7 @@ async def delete_tobacco(callback: CallbackQuery, session: AsyncSession) -> None
     tobacco_id = int(callback.data.split(":")[1])
 
     result = await session.execute(
-        select(Tobacco).where(Tobacco.id == tobacco_id)
+        select(Tobacco).where(Tobacco.id == tobacco_id, Tobacco.user.has(User.telegram_id == callback.from_user.id))
     )
     tobacco = result.scalar_one_or_none()
 
@@ -501,6 +470,11 @@ async def start_delete_mode(callback: CallbackQuery, state: FSMContext, session:
 async def toggle_delete_selection(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
     """Переключает выбор табака для удаления."""
     tobacco_id = int(callback.data.split(":")[1])
+    exists = await session.scalar(select(Tobacco.id).where(
+        Tobacco.id == tobacco_id, Tobacco.user.has(User.telegram_id == callback.from_user.id)))
+    if exists is None:
+        raise DomainError('Табак не найден', 404)
+
     
     data = await state.get_data()
     selected = set(data.get("selected", []))
@@ -576,7 +550,7 @@ async def delete_selected_tobaccos(callback: CallbackQuery, state: FSMContext, s
     
     # Удаляем выбранные табаки
     result = await session.execute(
-        select(Tobacco).where(Tobacco.id.in_(selected))
+        select(Tobacco).where(Tobacco.id.in_(selected), Tobacco.user.has(User.telegram_id == callback.from_user.id))
     )
     tobaccos_to_delete = result.scalars().all()
     
@@ -667,7 +641,29 @@ async def delete_all_tobaccos(callback: CallbackQuery, session: AsyncSession) ->
 
 # ============ РЕДАКТИРОВАНИЕ ТАБАКА ============
 
+class EditTobaccoStates(StatesGroup):
+    waiting_fields = State()
+
+
 @router.callback_query(F.data.startswith("edit_tobacco:"))
-async def edit_tobacco(callback: CallbackQuery) -> None:
-    """Редактирование табака (заглушка)."""
-    await callback.answer("🚧 Функция в разработке", show_alert=True)
+async def edit_tobacco(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    tobacco_id = int(callback.data.split(':')[1])
+    user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.first_name)
+    await services.load_tobacco(session, user.id, tobacco_id)
+    await state.set_state(EditTobaccoStates.waiting_fields)
+    await state.update_data(tobacco_id=tobacco_id)
+    await callback.message.edit_text('Введите новое название и бренд: Название | Бренд. Пустой бренд после | очищает поле. Для отмены /start.')
+    await callback.answer()
+
+
+@router.message(F.text, ~F.text.startswith("/"), EditTobaccoStates.waiting_fields)
+async def save_tobacco_edit(message: Message, state: FSMContext, session: AsyncSession):
+    values = (message.text or '').split('|', 1)
+    fields = {'name': values[0].strip()}
+    if len(values) == 2:
+        fields['brand'] = values[1].strip() or None
+    data = await state.get_data()
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username, message.from_user.first_name)
+    await services.update_tobacco(session, user.id, data['tobacco_id'], TobaccoUpdate.model_validate(fields))
+    await state.clear()
+    await message.answer('Табак обновлён.', reply_markup=back_to_menu())

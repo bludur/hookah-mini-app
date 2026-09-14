@@ -1,0 +1,40 @@
+# Бесплатное размещение
+
+Схема: существующие Render Free API и Static Site + Neon Free PostgreSQL + Upstash Free Redis + модель `openrouter/free`. Не подключать платные планы, автоматическое пополнение или оплату превышения квот. Бесплатные тарифы ограничены; это не гарантия непрерывной доступности.
+
+## Данные существующего сервиса
+
+Рабочий API `hookah-app` (`srv-d6134dqqcgvc73an99bg`) использует SQLite на временном диске Render. **Не перезапускать, не менять тариф и не развёртывать код до решения вопроса сохранности рабочей БД.** На Render Free нет SSH/Shell для полной выгрузки. Локальные резервные копии не доказывают сохранность серверных данных. Если полная выгрузка невозможна, восстановление из локальной копии требует явного согласия владельца на потерю отсутствующих в ней данных.
+
+## Ресурсы и подключения
+
+1. В аккаунте владельца создать Neon-проект на Free. Сохранить масштабирование до нуля. Выбрать регион максимально близко к API (Oregon). Использовать прямое соединение PostgreSQL для миграций и небольшого пула API, а не transaction-pooler.
+2. Для SQLAlchemy/asyncpg строка имеет вид `postgresql+asyncpg://USER:PASSWORD@HOST/DATABASE?ssl=verify-full`. Использовать значения своего проекта с корректным URL-кодированием пароля. Параметры libpq `sslmode` и `channel_binding` нельзя просто передавать как аргументы asyncpg; выбрать строку для соответствующего драйвера. `ssl=verify-full` проверяет сертификат и имя сервера. Не отключать TLS и проверку сертификата.
+3. Создать Upstash Redis на Free с TLS, persistence и отключённым eviction. Использовать Redis TCP URL `rediss://...`, а не HTTP REST URL/token. При исчерпании памяти или квоты генерация должна возвращать ошибку, а не переходить на локальные счётчики. Совместимость Lua-скриптов и общие ограничения проверить на самом экземпляре перед запуском.
+4. Секреты разместить в Environment API: `DATABASE_URL`, `REDIS_URL`, `BOT_TOKEN`, новый `LLM_API_KEY`. `BOT_TOKEN` — токен бота, который открывает Mini App; без него новая авторизация не работает.
+
+## Параметры Render API
+
+- План: Free; Root Directory: пусто (корень репозитория).
+- Build: `pip install -r requirements.txt`.
+- Start: `python -m uvicorn --app-dir mini-app-backend main:app --host 0.0.0.0 --port $PORT`.
+- Health Check: `/healthz`; Auto-Deploy: Off до отдельного решения о безопасном автоматическом выпуске.
+- `APP_ENV=production`, `CORS_ORIGINS=https://hookah-mini-app.onrender.com`.
+- `LLM_API_URL=https://openrouter.ai/api/v1`, `LLM_MODEL=openrouter/free`, `LLM_FREE_ONLY=true`.
+- Лимиты: `GENERATION_GLOBAL_DAILY_LIMIT=40`, `GENERATION_DAILY_LIMIT=10`, `GENERATION_HOURLY_LIMIT=5`, `GENERATION_CONCURRENCY=2`.
+
+Free-only режим отклоняет платную модель и другой endpoint, передаёт OpenRouter нулевые максимальные цены prompt/completion. Автоматического перехода на платную модель нет. На стороне OpenRouter также ограничить доступ ключа бесплатными моделями, если такая настройка доступна. Бесплатный провайдер может отказать по квоте/нагрузке или вернуть невалидный рецепт; в этих случаях приложение сообщает ошибку.
+
+После подтверждённого резервного копирования и переноса данных выполнить из корня проекта `python -m alembic upgrade head` с `DATABASE_URL` целевой PostgreSQL. Только затем вручную разворачивать API и совместимый frontend. Startup проверяет версию схемы и Redis и не запускает миграции сам. Не импортировать SQLite в PostgreSQL простым копированием файла; нужен проверенный перенос записей, идентификаторов и последовательностей.
+
+Frontend остаётся существующим Static Site: Root Directory `mini-app-frontend`, build `npm ci --ignore-scripts && npm run build`, publish `dist`, Node из `.node-version`, `VITE_API_URL=https://hookah-app-uznz.onrender.com/api`.
+
+## Ограничения и проверки
+
+- Render Free засыпает при отсутствии трафика. Первый запрос может быть медленным. Не использовать искусственные запросы для обхода ограничений тарифа.
+- `/healthz` проверяет процесс без пробуждения Neon. После выпуска отдельно проверить `/api/health`, Telegram-подпись, права владельца и реальную генерацию.
+- Квоты на дату подготовки: Neon Free — 0.5 GB и 100 CU-hours на проект в месяц; Upstash Free — 256 MB и 500 000 команд в месяц. Следить за лимитами в панелях; при их исчерпании не включать платный тариф автоматически.
+- Непрерывный polling-бот не включён в эту бесплатную конфигурацию Render. Mini App может открываться через меню Telegram без отдельного polling-процесса. Размещение командного бота отдельно требует собственного бесплатного постоянно работающего окружения либо отдельной реализации webhook.
+- Регулярно сохранять PostgreSQL-резервные копии вне Render и проверять восстановление; короткое окно восстановления бесплатного провайдера не заменяет собственную копию.
+
+Источники: [Render Free](https://render.com/docs/free), [Neon Free](https://neon.com/pricing), [Upstash Free](https://upstash.com/pricing/redis), [OpenRouter Free Router](https://openrouter.ai/openrouter/free), [asyncpg SSL](https://magicstack.github.io/asyncpg/current/api/index.html).

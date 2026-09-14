@@ -1,4 +1,4 @@
-import { getTelegramUser, getMockUser, isTelegramWebApp } from './telegram';
+import { tg } from './telegram';
 
 // В production замените на URL вашего backend на Render
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -61,42 +61,37 @@ export interface BulkResult {
   errors: string[];
 }
 
-// Получение заголовков с данными пользователя
+// Only signed Telegram data identifies the user. No production or development mock identity.
 const getHeaders = (): Record<string, string> => {
-  const user = isTelegramWebApp() ? getTelegramUser() : getMockUser();
-  
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (user) {
-    headers['X-Telegram-User-Id'] = String(user.id);
-    if (user.username) headers['X-Telegram-Username'] = encodeURIComponent(user.username);
-    if (user.first_name) headers['X-Telegram-First-Name'] = encodeURIComponent(user.first_name);
-  }
-  
-  return headers;
+  if (!tg?.initData) throw new Error('Откройте приложение из Telegram.');
+  return { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg.initData };
 };
 
-// Базовая функция запроса
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      ...getHeaders(),
-      ...options.headers,
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Ошибка сети' }));
-    throw new Error(error.detail || 'Произошла ошибка');
+export async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers = { ...options.headers, ...getHeaders() };
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener('abort', forwardAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), endpoint === '/mixes/generate' ? 50000 : 15000);
+  try {
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options, headers, credentials: 'omit', signal: controller.signal,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      if (response.status === 401) throw new Error('Сессия истекла. Закройте и откройте приложение заново в Telegram.');
+      throw new Error(typeof error?.detail === 'string' ? error.detail : 'Не удалось выполнить запрос. Попробуйте ещё раз.');
+    }
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('Превышено время ожидания. Обновите данные перед повторной попыткой.');
+    if (error instanceof TypeError) throw new Error('Не удалось связаться с сервером. Проверьте подключение.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', forwardAbort);
   }
-
-  return response.json();
 }
 
 // ============ USER API ============
@@ -130,7 +125,7 @@ export const tobaccosApi = {
       body: JSON.stringify({ tobaccos }),
     }),
   
-  update: (id: number, data: { name?: string; brand?: string; category_id?: number }) =>
+  update: (id: number, data: { name?: string; brand?: string | null; category_id?: number | null; notes?: string | null }) =>
     request<Tobacco>(`/tobaccos/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -160,9 +155,9 @@ export const mixesApi = {
       body: JSON.stringify(data),
     }),
   
-  getAll: (limit = 20) => request<Mix[]>(`/mixes?limit=${limit}`),
+  getAll: (limit = 20, offset = 0) => request<Mix[]>(`/mixes?limit=${limit}&offset=${offset}`),
   
-  getFavorites: () => request<Mix[]>('/mixes/favorites'),
+  getFavorites: (limit = 20, offset = 0) => request<Mix[]>(`/mixes/favorites?limit=${limit}&offset=${offset}`),
   
   getById: (id: number) => request<Mix>(`/mixes/${id}`),
   

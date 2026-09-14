@@ -23,7 +23,7 @@ export const hapticFeedback = {
 
 export const showAlert = (message: string): Promise<void> => {
   return new Promise((resolve) => {
-    if (tg) {
+    if (isTelegramWebApp() && tg) {
       tg.showAlert(message, resolve);
     } else {
       alert(message);
@@ -34,7 +34,7 @@ export const showAlert = (message: string): Promise<void> => {
 
 export const showConfirm = (message: string): Promise<boolean> => {
   return new Promise((resolve) => {
-    if (tg) {
+    if (isTelegramWebApp() && tg) {
       tg.showConfirm(message, resolve);
     } else {
       resolve(confirm(message));
@@ -48,10 +48,3 @@ export const initTelegram = () => {
     tg.expand();
   }
 };
-
-// Моковый пользователь для разработки вне Telegram
-export const getMockUser = () => ({
-  id: 123456789,
-  first_name: 'Test',
-  username: 'test_user',
-});

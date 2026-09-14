@@ -4,6 +4,12 @@ from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.base import DefaultKeyBuilder
+from bot.security import PrivateChatMiddleware
+from hookah_core.database import engine
+from hookah_core.limits import limiter
+from hookah_core.llm import llm_service
 from aiogram.types import BotCommand, TelegramObject
 from aiogram import BaseMiddleware
 
@@ -49,32 +55,40 @@ async def main() -> None:
     logger.info("Starting bot...")
 
     # Инициализация БД
+    settings.validate_runtime()
     await init_db()
+    await limiter.start()
     logger.info("Database initialized")
 
     # Создание бота и диспетчера
-    bot = Bot(token=settings.bot_token)
-    dp = Dispatcher(storage=MemoryStorage())
+    bot = Bot(token=settings.bot_token.get_secret_value())
+    storage = RedisStorage.from_url(
+        settings.redis_url.get_secret_value(), state_ttl=3600, data_ttl=3600,
+        key_builder=DefaultKeyBuilder(prefix=f'fsm:{settings.app_env}', with_bot_id=True),
+    ) if settings.redis_url.get_secret_value() else MemoryStorage()
+    dp = Dispatcher(storage=storage)
 
     # Middleware
     dp.update.middleware(DatabaseMiddleware())
+    dp.message.outer_middleware(PrivateChatMiddleware())
+    dp.callback_query.outer_middleware(PrivateChatMiddleware())
 
     # Роутеры
     dp.include_router(start.router)
     dp.include_router(collection.router)
     dp.include_router(mix.router)
 
-    # Команды
-    await set_commands(bot)
-
-    # Запуск
-    await bot.delete_webhook(drop_pending_updates=True)
-    logger.info("Bot started successfully!")
-
     try:
+        await set_commands(bot)
+        await bot.delete_webhook(drop_pending_updates=False)
+        logger.info("Bot started successfully!")
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
+        await storage.close()
+        await llm_service.close()
+        await limiter.close()
+        await engine.dispose()
         logger.info("Bot stopped")
 
 

@@ -1,6 +1,8 @@
 # Environment
 .env
 *.env
+.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -24,5 +26,10 @@ env/
 # Logs
 *.log
 
-# Test files
-test_*.py
+# Generated files
+node_modules/
+dist/
+.pytest_cache/
+.coverage
+coverage/
+*.tsbuildinfo

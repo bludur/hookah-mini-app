@@ -1,0 +1,41 @@
+# Free profile: external Neon Free PostgreSQL and Upstash Free Redis.
+# For the existing service, apply these settings only after backing up production.
+services:
+  - type: web
+    name: hookah-app
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Free has no pre-deploy phase. Run migrations separately before manual deploy.
+    autoDeployTrigger: 'off'
+    startCommand: python -m uvicorn --app-dir mini-app-backend main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.16
+      - key: BOT_TOKEN
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_API_URL
+        value: https://openrouter.ai/api/v1
+      - key: LLM_MODEL
+        value: openrouter/free
+      - key: LLM_FREE_ONLY
+        value: 'true'
+      - key: GENERATION_GLOBAL_DAILY_LIMIT
+        value: '40'
+      - key: GENERATION_DAILY_LIMIT
+        value: '10'
+      - key: GENERATION_HOURLY_LIMIT
+        value: '5'
+      - key: GENERATION_CONCURRENCY
+        value: '2'
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false

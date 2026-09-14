@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { initTelegram } from './telegram';
+import { initTelegram, isTelegramWebApp } from './telegram';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './pages/HomePage';
 import { CollectionPage } from './pages/CollectionPage';
@@ -14,6 +14,13 @@ function App() {
   useEffect(() => {
     initTelegram();
   }, []);
+
+  if (!isTelegramWebApp()) {
+    return <div className="p-6 text-tg-text" role="alert">
+      <h1 className="text-xl font-bold mb-3">Откройте приложение в Telegram</h1>
+      <p>Перейдите в личный чат с ботом и нажмите кнопку приложения.</p>
+    </div>;
+  }
 
   const renderPage = () => {
     switch (currentTab) {
