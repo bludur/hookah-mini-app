@@ -61,6 +61,14 @@ class MixComponent(InputModel):
     portion: int = Field(strict=True, gt=0, le=100)
     role: Role
 
+    @field_validator('role', mode='before')
+    @classmethod
+    def canonical_role(cls, value):
+        # Free providers may translate these enum labels despite a Russian prompt.
+        if isinstance(value, str):
+            return {'base': 'база', 'addition': 'дополнение', 'accent': 'акцент'}.get(value, value)
+        return value
+
 
 class MixRecommendation(InputModel):
     name: Name

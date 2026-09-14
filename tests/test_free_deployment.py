@@ -9,6 +9,17 @@ from hookah_core.errors import GenerationUnavailable
 from hookah_core.llm import LLMService
 
 
+def test_provider_role_translation_preserves_strict_recipe_validation(valid_mix):
+    from hookah_core.schemas import MixRecommendation
+    valid_mix['components'][0]['role'] = 'base'
+    valid_mix['components'][1]['role'] = 'accent'
+    result = MixRecommendation.model_validate(valid_mix)
+    assert [c.role for c in result.components] == ['база', 'акцент']
+    valid_mix['components'][1]['role'] = 'unknown'
+    with pytest.raises(ValueError):
+        MixRecommendation.model_validate(valid_mix)
+
+
 async def test_redis_tls_checks_hostname_and_trusted_roots():
     import certifi
     from hookah_core.limits import GenerationLimiter
