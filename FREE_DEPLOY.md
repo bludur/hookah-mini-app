@@ -17,6 +17,14 @@
 
 ## Параметры Render API
 
+### Команда открытия приложения в группе
+
+`/app` и `/app@dimon_hookah_mix_bot` возвращают обычную URL-кнопку на `https://t.me/dimon_hookah_mix_bot?startapp`. Main Mini App должен быть включён в BotFather. Для другого бота задайте `BOT_USERNAME` (без @). Личные данные в группе не выводятся.
+
+Существующий API обслуживает `POST /telegram/launcher`: это только команда открытия приложения, не полный текстовый бот. Вход защищён заголовком Telegram `X-Telegram-Bot-Api-Secret-Token`; секрет — HMAC-SHA256(BOT_TOKEN, `hookah:launcher-webhook:v1`), hex. Регистрировать webhook через `setWebhook`, URL `https://hookah-app-uznz.onrender.com/telegram/launcher`, `allowed_updates=["message"]`, без удаления ожидающих сообщений. Не запускать polling одновременно: отдельный `bot.main` удаляет webhook при запуске. При возврате к polling необходимо явно сменить режим.
+
+В Redis подавляются повторные update_id (5 минут) и частые ответы в одном чате (5 секунд). При недоступном Redis обработчик возвращает ошибку, чтобы Telegram мог повторить доставку. Ответ отправляется механизмом JSON webhook reply; успешность доставки конкретного сообщения проверяется в чате, а не по HTTP 200 webhook. В темах форума сохраняется message_thread_id. Простой бесплатного Render может задержать первый ответ. Права администратора и отключение privacy mode не требуются для адресованной команды.
+
 - План: Free; Root Directory: пусто (корень репозитория).
 - Build: `pip install -r requirements.txt`.
 - Start: `python -m uvicorn --app-dir mini-app-backend main:app --host 0.0.0.0 --port $PORT`.

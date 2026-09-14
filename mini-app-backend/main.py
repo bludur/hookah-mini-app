@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import re
+import hmac
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -22,6 +23,8 @@ from hookah_core.photos import PhotoRequest, PhotoResult, MAX_UPLOAD_BODY, photo
 from hookah_core.models import User, Category, Tobacco, Mix
 from hookah_core import services
 from hookah_core.sharing import ShareCreate, ShareOpen, share_store
+from bot.launcher import launch_reply, webhook_secret
+from aiogram.types import Update
 from schemas import (UserResponse, CategoryResponse, TobaccoCreate, TobaccoUpdate, TobaccoResponse,
                      TobaccoBulkCreate, TobaccoBulkResponse, MixResponse, MixGenerateRequest,
                      MixGenerateResponse, MixRateRequest, MixFavoriteRequest, StatsResponse)
@@ -47,6 +50,30 @@ async def lifespan(app):
 app = FastAPI(title='Hookah Mix API', version='1.1.0', lifespan=lifespan,
               docs_url='/docs' if settings.app_env != 'production' else None,
               redoc_url=None, openapi_url='/openapi.json' if settings.app_env != 'production' else None)
+
+
+@app.post('/telegram/launcher')
+async def telegram_launcher(request: Request):
+    supplied = request.headers.get('x-telegram-bot-api-secret-token', '')
+    if not settings.bot_token.get_secret_value() or not hmac.compare_digest(supplied.encode(), webhook_secret().encode()):
+        raise HTTPException(403, 'Forbidden')
+    try:
+        event = Update.model_validate(await request.json())
+    except ValueError:
+        raise HTTPException(422, 'Invalid update') from None
+    if event.message is None:
+        return {'ok': True}
+    reply = launch_reply(event.message, settings.bot_username)
+    if reply is None:
+        return {'ok': True}
+    # Authenticated updates only. Bound retries and command spam in shared Redis.
+    bot_id = settings.bot_token.get_secret_value().split(':', 1)[0]
+    prefix = f'hookah:{settings.app_env}:{bot_id}:launcher'
+    if not await share_store.call('set', f'{prefix}:update:{event.update_id}', '1', nx=True, ex=300):
+        return {'ok': True}
+    if not await share_store.call('set', f'{prefix}:chat:{event.message.chat.id}', '1', nx=True, ex=5):
+        return {'ok': True}
+    return {'method': 'sendMessage', **reply}
 
 
 class RequestBoundary:

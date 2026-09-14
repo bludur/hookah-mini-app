@@ -39,6 +39,16 @@ class PrivateChatMiddleware(BaseMiddleware):
             await event.answer(message)
 
     async def __call__(self, handler, event, data):
+        # Handle the public launcher here; never let group messages reach private handlers.
+        if isinstance(event, Message) and (event.text or '').startswith('/app'):
+            from bot.launcher import launch_reply
+            from aiogram.types import InlineKeyboardMarkup
+            bot = data.get('bot') or event.bot
+            username = (await bot.me()).username
+            reply = launch_reply(event, username)
+            if reply:
+                reply['reply_markup'] = InlineKeyboardMarkup.model_validate(reply['reply_markup'])
+                return await bot.send_message(**reply)
         message = event.message if isinstance(event, CallbackQuery) else event
         if not isinstance(message, Message) or message.chat.type != 'private':
             if isinstance(event, CallbackQuery):

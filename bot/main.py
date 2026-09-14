@@ -10,7 +10,7 @@ from bot.security import PrivateChatMiddleware
 from hookah_core.database import engine
 from hookah_core.limits import limiter
 from hookah_core.llm import llm_service
-from aiogram.types import BotCommand, TelegramObject
+from aiogram.types import BotCommand, TelegramObject, BotCommandScopeAllGroupChats
 from aiogram import BaseMiddleware
 
 from bot.config import settings
@@ -42,12 +42,14 @@ class DatabaseMiddleware(BaseMiddleware):
 async def set_commands(bot: Bot) -> None:
     """Устанавливает команды бота."""
     commands = [
+        BotCommand(command="app", description="🌿 Открыть приложение"),
         BotCommand(command="start", description="🏠 Главное меню"),
         BotCommand(command="collection", description="📦 Моя коллекция"),
         BotCommand(command="add", description="➕ Добавить табак"),
         BotCommand(command="mix", description="🎨 Подобрать микс"),
     ]
     await bot.set_my_commands(commands)
+    await bot.set_my_commands([commands[0]], scope=BotCommandScopeAllGroupChats())
 
 
 async def main() -> None:

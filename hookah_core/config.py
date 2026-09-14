@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     app_env: Literal['development', 'test', 'production'] = 'development'
     bot_token: SecretStr = SecretStr('')
+    bot_username: str = Field('dimon_hookah_mix_bot', pattern=r'^[A-Za-z0-9_]{5,32}$')
     database_url: str = 'sqlite+aiosqlite:///' + (ROOT / 'hookah_app.db').as_posix()
     redis_url: SecretStr = SecretStr('')
     cors_origins: str = 'http://localhost:3000,http://127.0.0.1:3000'
