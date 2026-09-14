@@ -27,7 +27,7 @@ export function MixPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBase, setSelectedBase] = useState<string | null>(null);
+  const [selectedBase, setSelectedBase] = useState<number | null>(null);
   const [showBaseSelector, setShowBaseSelector] = useState(false);
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function MixPage() {
 
   const generateMix = async (
     type: 'base' | 'profile' | 'surprise',
-    baseTobacco?: string,
+    baseTobacco?: number,
     tasteProfile?: string
   ) => {
     setIsGenerating(true);
@@ -61,7 +61,7 @@ export function MixPage() {
     try {
       const mix = await mixesApi.generate({
         request_type: type,
-        base_tobacco: baseTobacco,
+        base_tobacco_id: baseTobacco,
         taste_profile: tasteProfile,
       });
       setCurrentMix(mix);
@@ -143,15 +143,16 @@ export function MixPage() {
                       key={t.id}
                       onClick={() => {
                         hapticFeedback.selection();
-                        setSelectedBase(t.name);
+                        setSelectedBase(t.id);
                       }}
                       className={`p-3 rounded-xl text-left text-sm transition-colors tap-highlight ${
-                        selectedBase === t.name
+                        selectedBase === t.id
                           ? 'bg-tg-button text-tg-button-text'
                           : 'bg-tg-secondary-bg text-tg-text'
                       }`}
                     >
                       {t.category?.emoji || '🔸'} {t.name}
+                      {t.brand && <span className="block text-xs opacity-75">{t.brand}</span>}
                     </button>
                   ))}
                 </div>

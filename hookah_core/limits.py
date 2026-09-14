@@ -38,8 +38,9 @@ return 0
 
 
 class GenerationLimiter:
-    def __init__(self, config=settings):
+    def __init__(self, config=settings, namespace='generation'):
         self.config = config
+        self.namespace = namespace
         redis_url = config.redis_url.get_secret_value()
         tls = {'ssl_ca_certs': certifi.where(), 'ssl_check_hostname': True} if redis_url.startswith('rediss://') else {}
         self.redis = Redis.from_url(redis_url, socket_timeout=3, socket_connect_timeout=3, **tls) if redis_url else None
@@ -65,6 +66,8 @@ class GenerationLimiter:
         bot_id = self.config.bot_token.get_secret_value().split(':', 1)[0]
         # A hash tag keeps keys in one slot when using Redis Cluster.
         prefix = f'hookah:{{{self.config.app_env}:{bot_id}}}'
+        if self.namespace != 'generation':
+            prefix += ':' + self.namespace
         keys = [f'{prefix}:active', f'{prefix}:user:{telegram_id}:active',
                 f'{prefix}:hour:{now // 3600}:{telegram_id}',
                 f'{prefix}:day:{now // 86400}:{telegram_id}', f'{prefix}:day:{now // 86400}:all']

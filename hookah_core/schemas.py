@@ -4,6 +4,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=100)]
+TobaccoReference = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=240)]
 Brand = Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)]
 Notes = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
 Role = Literal['база', 'дополнение', 'акцент']
@@ -40,16 +41,19 @@ class TobaccoUpdate(InputModel):
 
 class MixGenerateRequest(InputModel):
     request_type: Literal['base', 'profile', 'surprise']
-    base_tobacco: Name | None = None
+    base_tobacco: TobaccoReference | None = None
+    base_tobacco_id: int | None = Field(None, gt=0)
     taste_profile: Literal['сладкий', 'кислый', 'свежий'] | None = None
 
     @model_validator(mode='after')
     def matching_fields(self) -> Self:
-        if self.request_type == 'base' and not self.base_tobacco:
+        if self.base_tobacco and self.base_tobacco_id is not None:
+            raise ValueError('Выберите один способ задания базы')
+        if self.request_type == 'base' and not (self.base_tobacco or self.base_tobacco_id):
             raise ValueError('Выберите базовый табак')
         if self.request_type == 'profile' and not self.taste_profile:
             raise ValueError('Выберите вкусовой профиль')
-        if self.request_type != 'base' and self.base_tobacco is not None:
+        if self.request_type != 'base' and (self.base_tobacco is not None or self.base_tobacco_id is not None):
             raise ValueError('Базовый табак допустим только для режима base')
         if self.request_type != 'profile' and self.taste_profile is not None:
             raise ValueError('Профиль допустим только для режима profile')
@@ -57,7 +61,7 @@ class MixGenerateRequest(InputModel):
 
 
 class MixComponent(InputModel):
-    tobacco: Name
+    tobacco: TobaccoReference
     portion: int = Field(strict=True, gt=0, le=100)
     role: Role
 

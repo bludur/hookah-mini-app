@@ -143,14 +143,15 @@ async def generate_mix_by_tobacco(
     # Сохраняем параметры для retry
     await state.update_data(
         request_type="base",
-        base_tobacco=base_tobacco.name,
+        base_tobacco_id=base_tobacco.id,
+        base_tobacco=None,
         taste_profile=None,
     )
 
     await _generate_mix(
         callback, session, state,
         request_type="base",
-        base_tobacco=base_tobacco.name,
+        base_tobacco_id=base_tobacco.id,
     )
 
 
@@ -171,6 +172,7 @@ async def generate_mix_by_profile(
     await state.update_data(
         request_type="profile",
         base_tobacco=None,
+        base_tobacco_id=None,
         taste_profile=profile,
     )
 
@@ -196,6 +198,7 @@ async def generate_surprise_mix(
     await state.update_data(
         request_type="surprise",
         base_tobacco=None,
+        base_tobacco_id=None,
         taste_profile=None,
     )
 
@@ -232,6 +235,7 @@ async def retry_mix(
         callback, session, state,
         request_type=data["request_type"],
         base_tobacco=data.get("base_tobacco"),
+        base_tobacco_id=data.get("base_tobacco_id"),
         taste_profile=data.get("taste_profile"),
     )
 
@@ -243,11 +247,12 @@ async def _generate_mix(
     request_type: str,
     base_tobacco: str = None,
     taste_profile: str = None,
+    base_tobacco_id: int = None,
 ) -> None:
     """Общая функция генерации микса."""
     await callback.answer()
     user = await get_or_create_user(session, callback.from_user.id, callback.from_user.username, callback.from_user.first_name)
-    data = MixGenerateRequest(request_type=request_type, base_tobacco=base_tobacco, taste_profile=taste_profile)
+    data = MixGenerateRequest(request_type=request_type, base_tobacco=base_tobacco, base_tobacco_id=base_tobacco_id, taste_profile=taste_profile)
     mix, recommendation = await services.generate_mix(session, user, data)
     components_text = '\n'.join(
         f'{get_role_emoji(c.role)} {escape_md(c.tobacco)} — *{c.portion}%* ({c.role})'

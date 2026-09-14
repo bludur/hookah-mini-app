@@ -1,4 +1,5 @@
 import { ErrorState } from '../components/ErrorState';
+import { PhotoImport } from '../components/PhotoImport';
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, Package, ListPlus } from 'lucide-react';
 import { useStore } from '../store';
@@ -187,7 +188,8 @@ export function CollectionPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
+        <PhotoImport onAdded={() => { tobaccosApi.getAll().then(setTobaccos).catch(() => setLoadError('Обновите коллекцию, чтобы увидеть добавленные табаки.')); }} />
         <Button
           variant="secondary"
           size="sm"

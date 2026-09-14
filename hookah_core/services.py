@@ -73,7 +73,7 @@ async def bulk_tobaccos(session, user_id, rows):
     if not 1 <= len(rows) <= 100:
         raise DomainError('Добавляйте от 1 до 100 табаков за раз', 422)
     await lock_collection(session, user_id)
-    names = set((await session.scalars(select(Tobacco.normalized_name).where(Tobacco.user_id == user_id))).all())
+    names = set((await session.execute(select(Tobacco.normalized_name, Tobacco.normalized_brand).where(Tobacco.user_id == user_id))).all())
     categories = set((await session.scalars(select(Category.id))).all())
     result = {'added': [], 'skipped': [], 'errors': []}
     for number, row in enumerate(rows, 1):
@@ -84,13 +84,13 @@ async def bulk_tobaccos(session, user_id, rows):
             continue
         if data.category_id is not None and data.category_id not in categories:
             result['errors'].append(f'Строка {number}: категория не найдена')
-        elif normalized_name(data.name) in names:
+        elif (normalized_name(data.name), normalized_name(data.brand or '')) in names:
             result['skipped'].append(data.name)
         elif len(names) >= settings.max_collection_size:
             result['errors'].append(f'Строка {number}: коллекция заполнена')
         else:
             session.add(Tobacco(user_id=user_id, **data.model_dump()))
-            names.add(normalized_name(data.name))
+            names.add((normalized_name(data.name), normalized_name(data.brand or '')))
             result['added'].append(data.name)
     await commit_collection(session)
     return result
@@ -103,10 +103,20 @@ async def generate_mix(session, user, data: MixGenerateRequest):
                                      .order_by(Tobacco.id).limit(settings.max_collection_size + 1))).all()
     if not 2 <= len(tobaccos) <= settings.max_collection_size:
         raise DomainError(f'Для микса нужно от 2 до {settings.max_collection_size} табаков')
-    names = {t.name for t in tobaccos}
-    if data.base_tobacco and data.base_tobacco not in names:
-        raise DomainError('Выбранный табак отсутствует в коллекции', 422)
-    collection = [{'name': t.name, 'brand': (t.brand or '')[:100], 'category': t.category.name if t.category else None} for t in tobaccos]
+    ambiguous = len({normalized_name(t.name) for t in tobaccos}) != len(tobaccos)
+    labels = {t.id: (f'#{t.id}: {t.name} ({t.brand or "без бренда"})' if ambiguous else t.name) for t in tobaccos}
+    base = data.base_tobacco
+    if data.base_tobacco_id is not None:
+        base = labels.get(data.base_tobacco_id)
+        if base is None:
+            raise DomainError('Выбранный табак отсутствует в коллекции', 422)
+    elif base:
+        matches = [t for t in tobaccos if t.name == base]
+        if len(matches) != 1:
+            raise DomainError('Выберите конкретный табак с брендом заново.', 422)
+        base = labels[matches[0].id]
+    names = set(labels.values())
+    collection = [{'name': labels[t.id], 'brand': (t.brand or '')[:100], 'category': t.category.name if t.category else None} for t in tobaccos]
     rated = (await session.scalars(select(Mix).where(Mix.user_id == user_id, Mix.rating.isnot(None))
                                   .order_by(Mix.created_at.desc(), Mix.id.desc()).limit(40))).all()
     recent = (await session.scalars(select(Mix.name).where(Mix.user_id == user_id)
@@ -115,11 +125,11 @@ async def generate_mix(session, user, data: MixGenerateRequest):
     disliked = [m.name[:100] for m in rated if m.rating == -1][:20]
     await session.commit()  # Never hold a database transaction during the provider call.
     async with limiter.reserve(telegram_id):
-        recommendation = await llm_service.generate_mix(tobaccos=collection, **data.model_dump(),
+        recommendation = await llm_service.generate_mix(tobaccos=collection, request_type=data.request_type, base_tobacco=base, taste_profile=data.taste_profile,
                                                         liked_mixes=liked, disliked_mixes=disliked,
                                                         previous_mixes=[n[:100] for n in recent])
         try:
-            recommendation = MixRecommendation.model_validate(recommendation.model_dump()).validate_collection(names, data.base_tobacco)
+            recommendation = MixRecommendation.model_validate(recommendation.model_dump()).validate_collection(names, base)
         except (ValidationError, ValueError):
             raise GenerationUnavailable() from None
         item = Mix(user_id=user_id, name=recommendation.name,

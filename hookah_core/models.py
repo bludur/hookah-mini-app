@@ -50,18 +50,25 @@ class Tobacco(Base):
     """Табак пользователя."""
 
     __tablename__ = "tobaccos"
-    __table_args__ = (UniqueConstraint("user_id", "normalized_name", name="uq_tobacco_owner_name"), Index("ix_tobaccos_user_id", "user_id"))
+    __table_args__ = (UniqueConstraint("user_id", "normalized_name", "normalized_brand", name="uq_tobacco_owner_brand_name"), Index("ix_tobaccos_user_id", "user_id"))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     name: Mapped[str]
     normalized_name: Mapped[str] = mapped_column(String(300))
+    normalized_brand: Mapped[str] = mapped_column(String(300), default='', server_default='')
     brand: Mapped[Optional[str]] = mapped_column(nullable=True)
     category_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("categories.id"), nullable=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    @validates('brand')
+    def validate_brand(self, key, value):
+        value = (value or '').strip()
+        self.normalized_brand = normalized_name(value)
+        return value or None
 
     @validates('name')
     def validate_name(self, key, value):

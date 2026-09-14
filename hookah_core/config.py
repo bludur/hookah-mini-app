@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     generation_daily_limit: int = Field(30, ge=1, le=1000)
     generation_global_daily_limit: int = Field(1000, ge=1, le=100000)
     generation_concurrency: int = Field(4, ge=1, le=32)
+    photo_daily_limit: int = Field(3, ge=1, le=50)
+    photo_global_daily_limit: int = Field(20, ge=1, le=1000)
     max_collection_size: int = Field(200, ge=2, le=500)
 
     model_config = SettingsConfigDict(env_file=ROOT / '.env', extra='ignore')

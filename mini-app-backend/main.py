@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -16,6 +17,7 @@ from hookah_core.database import engine, init_db, get_session
 from hookah_core.errors import DomainError
 from hookah_core.limits import limiter
 from hookah_core.llm import llm_service
+from hookah_core.photos import PhotoRequest, PhotoResult, MAX_UPLOAD_BODY, photo_limiter, recognize_photo
 from hookah_core.models import User, Category, Tobacco, Mix
 from hookah_core import services
 from schemas import (UserResponse, CategoryResponse, TobaccoCreate, TobaccoUpdate, TobaccoResponse,
@@ -36,6 +38,7 @@ async def lifespan(app):
     finally:
         await llm_service.close()
         await limiter.close()
+        await photo_limiter.close()
         await engine.dispose()
 
 
@@ -59,17 +62,29 @@ class RequestBoundary:
                     (b'x-content-type-options', b'nosniff'), (b'cache-control', b'no-store')]
             await send(message)
 
+        is_photo = scope.get('path') == '/api/tobaccos/recognize-photo' and scope.get('method') == 'POST'
+        if is_photo:
+            try:
+                header = dict(scope.get('headers', [])).get(b'x-telegram-init-data', b'').decode('ascii')
+                validate_init_data(header, settings.bot_token.get_secret_value(), settings.telegram_auth_max_age)
+            except (InvalidInitData, UnicodeError):
+                return await JSONResponse({'detail': 'Откройте приложение в Telegram.'}, status_code=401)(scope, receive, safe_send)
+        maximum = MAX_UPLOAD_BODY if is_photo else 65536
         body = bytearray()
-        while True:
-            event = await receive()
-            if event['type'] == 'http.disconnect':
-                return
-            body.extend(event.get('body', b''))
-            if len(body) > 65536:
-                response = JSONResponse({'detail': 'Запрос слишком большой'}, status_code=413)
-                return await response(scope, receive, safe_send)
-            if not event.get('more_body', False):
-                break
+        try:
+            async with asyncio.timeout(15):
+                while True:
+                    event = await receive()
+                    if event['type'] == 'http.disconnect':
+                        return
+                    chunk = event.get('body', b'')
+                    if len(body) + len(chunk) > maximum:
+                        return await JSONResponse({'detail': 'Запрос слишком большой'}, status_code=413)(scope, receive, safe_send)
+                    body.extend(chunk)
+                    if not event.get('more_body', False):
+                        break
+        except TimeoutError:
+            return await JSONResponse({'detail': 'Загрузка заняла слишком много времени'}, status_code=408)(scope, receive, safe_send)
         delivered = False
 
         async def buffered_receive():
@@ -146,6 +161,12 @@ async def get_categories(session: Session):
 async def get_tobaccos(user: CurrentUser, session: Session):
     return (await session.scalars(select(Tobacco).where(Tobacco.user_id == user.id)
                                  .options(selectinload(Tobacco.category)).order_by(Tobacco.name))).all()
+
+
+@app.post('/api/tobaccos/recognize-photo', response_model=PhotoResult)
+async def recognize_tobaccos(data: PhotoRequest, user: CurrentUser, session: Session):
+    await session.commit()
+    return await recognize_photo(data.image, user.telegram_id)
 
 
 @app.get('/api/tobaccos/{tobacco_id}', response_model=TobaccoResponse)

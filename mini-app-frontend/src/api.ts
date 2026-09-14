@@ -73,7 +73,7 @@ export async function request<T>(endpoint: string, options: RequestInit = {}): P
   const forwardAbort = () => controller.abort();
   if (options.signal?.aborted) controller.abort();
   options.signal?.addEventListener('abort', forwardAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(), endpoint === '/mixes/generate' ? 50000 : 15000);
+  const timer = setTimeout(() => controller.abort(), ['/mixes/generate', '/tobaccos/recognize-photo'].includes(endpoint) ? 60000 : 15000);
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       ...options, headers, credentials: 'omit', signal: controller.signal,
@@ -109,6 +109,9 @@ export const categoriesApi = {
 // ============ TOBACCOS API ============
 
 export const tobaccosApi = {
+  recognizePhoto: (image: string) => request<{ tobaccos: Array<{ name: string; brand: string | null }>; unreadable: boolean }>('/tobaccos/recognize-photo', {
+    method: 'POST', body: JSON.stringify({ image }),
+  }),
   getAll: () => request<Tobacco[]>('/tobaccos'),
   
   getById: (id: number) => request<Tobacco>(`/tobaccos/${id}`),
@@ -148,6 +151,7 @@ export const mixesApi = {
   generate: (data: {
     request_type: 'base' | 'profile' | 'surprise';
     base_tobacco?: string;
+    base_tobacco_id?: number;
     taste_profile?: string;
   }) =>
     request<MixGenerateResponse>('/mixes/generate', {
