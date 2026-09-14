@@ -4,9 +4,10 @@ import { useStore } from '../store';
 import { userApi } from '../api';
 import { ErrorState } from '../components/ErrorState';
 import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { hapticFeedback, getTelegramUser } from '../telegram';
 
-export function HomePage() {
+export function HomePage({ onOpenGuide }: { onOpenGuide?: () => void }) {
   const { stats, setStats, setCurrentTab, tobaccos } = useStore();
   const [error, setError] = useState<string | null>(null);
   const loadStats = async () => {
@@ -35,6 +36,7 @@ export function HomePage() {
       <div className="home-stat"><strong>{stats?.mixes_count ?? '—'}</strong><span>миксов</span></div>
       <div className="home-stat"><strong>{stats?.favorites_count ?? '—'}</strong><span>избранных</span></div>
     </div>
+    {onOpenGuide && <div className="mb-5"><Button variant="ghost" size="sm" onClick={onOpenGuide}>Как пользоваться</Button></div>}
     <h2 className="eyebrow mb-3">Под рукой</h2>
     <div className="space-y-3">
       <Card onClick={() => go('collection')}>

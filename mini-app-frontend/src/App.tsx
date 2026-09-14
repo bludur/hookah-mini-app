@@ -1,4 +1,5 @@
 import { SharedPage } from './pages/SharedPage';
+import { Onboarding, needsOnboarding, completeOnboarding } from './components/Onboarding';
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { initTelegram, isTelegramWebApp, tg } from './telegram';
@@ -10,7 +11,9 @@ import { HistoryPage } from './pages/HistoryPage';
 import { FavoritesPage } from './pages/FavoritesPage';
 
 function App() {
-  const { currentTab } = useStore();
+  const { currentTab, setCurrentTab } = useStore();
+  const [showOnboarding, setShowOnboarding] = useState(needsOnboarding);
+  const closeOnboarding = () => { completeOnboarding(); setShowOnboarding(false); };
   const readShare = () => window.location.hash.startsWith('#share=') ? window.location.hash.slice(7) : null;
   const [shareToken, setShareToken] = useState(readShare);
   useEffect(() => { const update = () => setShareToken(readShare()); window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
@@ -37,7 +40,7 @@ function App() {
   const renderPage = () => {
     switch (currentTab) {
       case 'home':
-        return <HomePage />;
+        return <HomePage onOpenGuide={() => setShowOnboarding(true)} />;
       case 'collection':
         return <CollectionPage />;
       case 'mix':
@@ -47,7 +50,7 @@ function App() {
       case 'favorites':
         return <FavoritesPage />;
       default:
-        return <HomePage />;
+        return <HomePage onOpenGuide={() => setShowOnboarding(true)} />;
     }
   };
 
@@ -57,6 +60,7 @@ function App() {
         {renderPage()}
       </main>
       <Navigation />
+      {showOnboarding && <Onboarding onClose={closeOnboarding} onStart={() => { closeOnboarding(); setCurrentTab('collection'); }} />}
     </div>
   );
 }
