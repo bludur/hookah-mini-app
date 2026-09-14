@@ -6,6 +6,7 @@ import pytest
 from redis.asyncio import Redis
 from sqlalchemy import text, inspect
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.exc import IntegrityError
 from hookah_core.config import settings
 from hookah_core.limits import GenerationLimiter
 from hookah_core.errors import DomainError
@@ -23,11 +24,19 @@ async def test_postgres_migrations_and_integrity():
         async with admin.begin() as conn:
             await conn.execute(text(f'CREATE SCHEMA {schema}'))
         async with engine.begin() as conn:
+            await conn.run_sync(migrate, '0002')
+            await conn.execute(text("INSERT INTO users (id, telegram_id, created_at) VALUES (1, 11, CURRENT_TIMESTAMP)"))
+            await conn.execute(text("INSERT INTO tobaccos (id, user_id, name, normalized_name, brand, created_at) VALUES (1, 1, 'Mango', 'mango', 'A', CURRENT_TIMESTAMP)"))
             await conn.run_sync(migrate, 'head')
             tables = await conn.run_sync(lambda c: inspect(c).get_table_names(schema=schema))
             assert {'users', 'tobaccos', 'mixes', 'categories'} <= set(tables)
             constraints = await conn.run_sync(lambda c: inspect(c).get_unique_constraints('tobaccos', schema=schema))
-            assert any(c['name'] == 'uq_tobacco_owner_name' for c in constraints)
+            assert any(c['name'] == 'uq_tobacco_owner_brand_name' and set(c['column_names']) == {'user_id', 'normalized_name', 'normalized_brand'} for c in constraints)
+            assert await conn.scalar(text('SELECT normalized_brand FROM tobaccos WHERE id=1')) == 'a'
+            await conn.execute(text("INSERT INTO tobaccos (id, user_id, name, normalized_name, brand, normalized_brand, created_at) VALUES (2, 1, 'Mango', 'mango', 'B', 'b', CURRENT_TIMESTAMP)"))
+            with pytest.raises(IntegrityError):
+                async with conn.begin_nested():
+                    await conn.execute(text("INSERT INTO tobaccos (id, user_id, name, normalized_name, brand, normalized_brand, created_at) VALUES (3, 1, 'Mango', 'mango', 'A', 'a', CURRENT_TIMESTAMP)"))
             await conn.run_sync(migrate, 'head')
     finally:
         await engine.dispose()
