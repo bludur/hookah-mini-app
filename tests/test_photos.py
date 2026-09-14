@@ -53,7 +53,8 @@ async def test_photo_preview_never_writes_and_caps_price(api, provider, db):
     async with db() as session:
         assert await session.scalar(select(func.count(Tobacco.id))) == 0
     options = provider.call_args.kwargs
-    assert options['model'] == 'openrouter/free'
+    assert options['model'] == 'inclusionai/ling-3.0-flash-vl:free'
+    assert options['extra_body']['reasoning'] == {'enabled': False}
     assert options['extra_body']['provider']['max_price'] == {'prompt': 0, 'completion': 0}
     assert options['messages'][1]['content'][1]['image_url']['url'].startswith('data:image/jpeg;base64,')
 
