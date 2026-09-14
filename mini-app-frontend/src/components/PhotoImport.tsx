@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 import { tobaccosApi } from '../api';
 import { preparePhoto } from '../photo';
+import { readPhotoLocally } from '../localOcr';
+import { matchLabel, type CatalogEntry } from '../labelMatcher';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { Input } from './Input';
 
 type Draft = { name: string; brand: string };
 
-export function PhotoImport({ onAdded }: { onAdded: () => void }) {
+export function PhotoImport({ onAdded, catalog = [] }: { onAdded: () => void; catalog?: CatalogEntry[] }) {
   const [open, setOpen] = useState(false);
   const [image, setImage] = useState('');
   const [rows, setRows] = useState<Draft[] | null>(null);
@@ -16,14 +18,18 @@ export function PhotoImport({ onAdded }: { onAdded: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [localText, setLocalText] = useState('');
+  const [candidates, setCandidates] = useState<string[]>([]);
+  const [progress, setProgress] = useState('');
+  const localJob = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const camera = useRef<HTMLInputElement>(null);
   const gallery = useRef<HTMLInputElement>(null);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; localJob.current?.abort(); }; }, []);
 
   const choose = async (file?: File) => {
     if (!file || busy) return;
-    setBusy(true); setError(''); setRows(null); setImage('');
+    setBusy(true); setError(''); setRows(null); setImage(''); setLocalText(''); setCandidates([]); setProgress('Открываем фото…');
     try {
       const prepared = await preparePhoto(file);
       if (alive.current) setImage(prepared);
@@ -31,20 +37,36 @@ export function PhotoImport({ onAdded }: { onAdded: () => void }) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось открыть фото.');
     } finally { if (alive.current) setBusy(false); }
   };
+  const recognizeLocal = async () => {
+    if (busy || !image) return;
+    const controller = new AbortController(); localJob.current = controller;
+    setBusy(true); setError(''); setProgress('Подготавливаем распознавание…');
+    try {
+      const text = await readPhotoLocally(image, controller.signal, value => { if (alive.current) setProgress(value); });
+      if (!alive.current || controller.signal.aborted) return;
+      const result = matchLabel(text, catalog);
+      setLocalText(text); setCandidates(result.candidates); setRows([result.draft]);
+      setUnreadable(!result.draft.name);
+    } catch (e) {
+      if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось прочитать фото.');
+    } finally { localJob.current = null; if (alive.current) setBusy(false); }
+  };
   const recognize = async () => {
-    setBusy(true); setError('');
+    if (busy || !image) return;
+    setBusy(true); setError(''); setProgress('Обрабатываем в AI… Бесплатная модель может отвечать до минуты.');
     try {
       const result = await tobaccosApi.recognizePhoto(image);
       if (!alive.current) return;
       setRows(result.tobaccos.map(t => ({ name: t.name, brand: t.brand || '' })));
       setUnreadable(result.unreadable);
+      setLocalText(''); setCandidates([]);
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось распознать фото.');
     } finally { if (alive.current) setBusy(false); }
   };
   const save = async () => {
     if (!rows?.length) return;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setProgress('Сохраняем…');
     try {
       const result = await tobaccosApi.createBulk(rows.map(r => ({ name: r.name.trim(), brand: r.brand.trim() || undefined })));
       if (!alive.current) return;
@@ -65,10 +87,10 @@ export function PhotoImport({ onAdded }: { onAdded: () => void }) {
     }}>Добавить по фото</Button>
     {notice && <p role="status" className="text-sm text-tg-hint w-full">{notice}</p>}
     <Modal isOpen={open} title="Табаки по фото" onClose={() => {
-      if (!busy) { setOpen(false); setImage(''); setRows(null); setError(''); }
+      if (!busy) { setOpen(false); setImage(''); setRows(null); setError(''); setLocalText(''); setCandidates([]); }
     }}>
       <div className="space-y-3">
-        <p className="text-sm text-tg-hint">Снимите до 5 пачек названиями к камере. Избегайте бликов и перекрытых надписей.</p>
+        <p className="text-sm text-tg-hint">Для чтения на устройстве снимите одну пачку крупно, названиями к камере, без бликов. Для AI можно снять до 5 пачек.</p>
         <input ref={camera} aria-label="Снять пачки" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void choose(file); }} />
         <input ref={gallery} aria-label="Выбрать фото пачек" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void choose(file); }} />
         <div className="flex gap-2">
@@ -77,22 +99,36 @@ export function PhotoImport({ onAdded }: { onAdded: () => void }) {
         </div>
         {image && <img src={`data:image/jpeg;base64,${image}`} alt="Выбранное фото пачек" className="w-full max-h-48 object-contain rounded-xl" />}
         {rows === null && <>
-          <p className="text-xs text-tg-hint">Нажимая «Распознать», вы отправляете фото в OpenRouter и модель распознавания. Наш сервис не сохраняет снимок. Бесплатно, до 3 распознаваний в сутки; действует общий лимит сервиса.</p>
-          <Button fullWidth disabled={!image || busy} loading={busy} onClick={recognize}>Распознать</Button>
+          <p className="text-xs text-tg-hint">На устройстве — бесплатно, без дневной квоты. Фото не отправляется на сервер. При первом запуске загрузятся словари русского и английского; скорость зависит от телефона.</p>
+          <Button fullWidth disabled={!image || busy} loading={busy} onClick={recognizeLocal}>Прочитать на устройстве</Button>
+          <Button fullWidth variant="secondary" disabled={busy} onClick={() => { setRows([{ name: '', brand: '' }]); setUnreadable(false); }}>Ввести вручную</Button>
         </>}
         {rows !== null && <>
           <p className="text-sm">Проверьте названия и бренды. В коллекцию попадут только строки, которые вы подтвердите.</p>
           {(unreadable || !rows.length) && <p role="status" className="text-sm text-tg-hint">Не всё удалось прочитать. Проверьте список или снимите нераспознанные пачки ближе.</p>}
+          {localText && <details><summary className="text-sm cursor-pointer">Прочитанный текст и подсказки</summary>
+            <p className="text-xs text-tg-hint">Сверяем с вашей коллекцией и списком брендов. Неизвестный вкус выберите из текста или впишите вручную.</p>
+            <pre className="text-xs whitespace-pre-wrap break-words max-h-40 overflow-auto">{localText}</pre>
+          </details>}
           {rows.map((row, index) => <div key={index} className="space-y-2 p-3 bg-tg-secondary-bg rounded-xl">
             <Input aria-label={`Название ${index + 1}`} value={row.name} maxLength={100} disabled={busy} onChange={e => edit(index, 'name', e.target.value)} />
+            {index === 0 && candidates.length > 0 && <select aria-label="Выбрать название из текста" className="w-full p-2 rounded bg-tg-secondary-bg text-tg-text" value="" disabled={busy} onChange={e => { if (e.target.value) edit(index, 'name', e.target.value); }}>
+              <option value="">Выбрать название из текста</option>
+              {candidates.map(candidate => <option key={candidate} value={candidate}>{candidate}</option>)}
+            </select>}
             <Input aria-label={`Бренд ${index + 1}`} placeholder="Бренд (если читается)" value={row.brand} maxLength={100} disabled={busy} onChange={e => edit(index, 'brand', e.target.value)} />
             <Button size="sm" variant="secondary" disabled={busy} onClick={() => setRows(rows.filter((_, i) => i !== index))} icon={<Trash2 className="w-4 h-4" />}>Убрать строку {index + 1}</Button>
           </div>)}
           <Button fullWidth loading={busy} disabled={busy || !rows.length || rows.some(r => r.name.trim().length < 2)} onClick={save}>Добавить всё ({rows.length})</Button>
-          <Button fullWidth variant="secondary" disabled={busy} onClick={() => { setRows(null); setImage(''); setError(''); }}>Другое фото</Button>
+          <Button fullWidth variant="secondary" disabled={busy} onClick={() => { setRows(null); setImage(''); setError(''); setLocalText(''); setCandidates([]); }}>Другое фото</Button>
         </>}
+        {image && <details><summary className="text-sm cursor-pointer">Сложный снимок? Помощь AI</summary>
+          <p className="text-xs text-tg-hint my-2">Только кнопка ниже отправляет фото в OpenRouter и модель распознавания. Наш сервис не сохраняет снимок. Бесплатно, до 3 попыток в сутки; действует общий лимит сервиса. Результат заменит текущий черновик.</p>
+          <Button fullWidth variant="secondary" disabled={busy} onClick={recognize}>Распознать через AI</Button>
+        </details>}
         {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
-        {busy && <p role="status" className="text-sm text-tg-hint">Обрабатываем… Бесплатная модель может отвечать до минуты.</p>}
+        {busy && <p role="status" className="text-sm text-tg-hint">{progress}</p>}
+        {busy && localJob.current && <Button fullWidth variant="secondary" onClick={() => localJob.current?.abort()}>Отменить чтение</Button>}
       </div>
     </Modal>
   </>;

@@ -189,7 +189,7 @@ export function CollectionPage() {
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <PhotoImport onAdded={() => { tobaccosApi.getAll().then(setTobaccos).catch(() => setLoadError('Обновите коллекцию, чтобы увидеть добавленные табаки.')); }} />
+        <PhotoImport catalog={tobaccos} onAdded={() => { tobaccosApi.getAll().then(setTobaccos).catch(() => setLoadError('Обновите коллекцию, чтобы увидеть добавленные табаки.')); }} />
         <Button
           variant="secondary"
           size="sm"
