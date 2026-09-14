@@ -35,6 +35,17 @@ it('loads older history pages', async () => {
   expect(mixesApi.getAll).toHaveBeenLastCalledWith(20, 20);
 });
 
+it('distinguishes an empty search from an empty collection and resets the query', async () => {
+  vi.mocked(tobaccosApi.getAll).mockResolvedValue([{ id: 1, user_id: 1, name: 'Mango', brand: 'Brand', category_id: null, category: null, notes: null, created_at: '2026-09-14' }]);
+  vi.mocked(categoriesApi.getAll).mockResolvedValue([]);
+  render(<CollectionPage />);
+  fireEvent.change(await screen.findByLabelText('Поиск по коллекции'), { target: { value: 'not found' } });
+  expect(screen.getByText('Ничего не нашлось')).toBeInTheDocument();
+  expect(screen.queryByText('Коллекция пуста')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Сбросить поиск' }));
+  expect(screen.getByText('Mango')).toBeInTheDocument();
+});
+
 it('uses an accessible scrollable dialog and restores body scrolling', async () => {
   const close = vi.fn();
   const view = render(<Modal isOpen title="Рецепт" onClose={close}><p>Long recipe</p></Modal>);

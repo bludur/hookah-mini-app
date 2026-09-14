@@ -1,7 +1,7 @@
 import { ErrorState } from '../components/ErrorState';
 import { PhotoImport } from '../components/PhotoImport';
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Package, ListPlus } from 'lucide-react';
+import { Plus, Search, Trash2, Package, ListPlus, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import { tobaccosApi, categoriesApi, Tobacco } from '../api';
 import { Card } from '../components/Card';
@@ -153,13 +153,13 @@ export function CollectionPage() {
   }
 
   return (
-    <div className="min-h-screen pb-20 px-4 pt-4">
+    <div className="page">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-tg-text">
           Коллекция
-          <span className="text-tg-hint font-normal text-lg ml-2">
-            ({tobaccos.length})
+          <span className="count-badge ml-2">
+            {tobaccos.length}
           </span>
         </h1>
       </div>
@@ -170,7 +170,8 @@ export function CollectionPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-tg-hint" />
           <input
             type="text"
-            placeholder="Поиск..."
+            aria-label="Поиск по коллекции"
+            placeholder="Название или бренд"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-3 rounded-xl bg-tg-secondary-bg text-tg-text placeholder-tg-hint focus:outline-none"
@@ -183,12 +184,12 @@ export function CollectionPage() {
           }}
           icon={<Plus className="w-5 h-5" />}
         >
-          {''}
+          Добавить
         </Button>
       </div>
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-6">
         <PhotoImport catalog={tobaccos} onAdded={() => { tobaccosApi.getAll().then(setTobaccos).catch(() => setLoadError('Обновите коллекцию, чтобы увидеть добавленные табаки.')); }} />
         <Button
           variant="secondary"
@@ -207,9 +208,9 @@ export function CollectionPage() {
       {filteredTobaccos.length === 0 ? (
         <EmptyState
           icon={<Package className="w-16 h-16" />}
-          title="Коллекция пуста"
-          description="Добавь табаки, чтобы начать создавать миксы"
-          action={
+          title={searchQuery ? "Ничего не нашлось" : "Коллекция пуста"}
+          description={searchQuery ? "Попробуйте другое название или бренд" : "Добавьте первый вкус — по фото или вручную"}
+          action={searchQuery ? <Button variant="secondary" onClick={() => setSearchQuery('')}>Сбросить поиск</Button> :
             <Button onClick={() => setShowAddModal(true)} icon={<Plus className="w-5 h-5" />}>
               Добавить табак
             </Button>
@@ -223,8 +224,8 @@ export function CollectionPage() {
               onClick={() => openTobaccoDetails(tobacco)}
               padding="none"
             >
-              <div className="flex items-center p-3">
-                <span className="text-2xl mr-3">
+              <div className="flex items-center gap-3 p-4">
+                <span className="icon-tile text-xl">
                   {tobacco.category?.emoji || '🔸'}
                 </span>
                 <div className="flex-1 min-w-0">
@@ -233,6 +234,7 @@ export function CollectionPage() {
                     <p className="text-sm text-tg-hint truncate">{tobacco.brand}</p>
                   )}
                 </div>
+                <ChevronRight className="w-4 h-4 text-tg-hint" />
               </div>
             </Card>
           ))}
@@ -279,7 +281,7 @@ export function CollectionPage() {
             }}
             className="w-full px-3 py-2 rounded-lg text-sm bg-tg-secondary-bg text-tg-text focus:outline-none"
           >
-            <option value="">Категория (опц.)</option>
+            <option value="">Без категории</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.emoji} {cat.name}

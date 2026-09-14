@@ -18,8 +18,11 @@ export function Card({ children, className = '', onClick, padding = 'md' }: Card
   return (
     <div
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? event => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); onClick(); } } : undefined}
       className={`
-        bg-tg-section-bg rounded-2xl
+        surface-card bg-tg-section-bg rounded-2xl
         ${paddingStyles[padding]}
         ${onClick ? 'tap-highlight cursor-pointer active:scale-[0.98] transition-transform' : ''}
         ${className}

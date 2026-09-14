@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './store';
-import { initTelegram, isTelegramWebApp } from './telegram';
+import { initTelegram, isTelegramWebApp, tg } from './telegram';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './pages/HomePage';
 import { CollectionPage } from './pages/CollectionPage';
@@ -13,12 +13,18 @@ function App() {
 
   useEffect(() => {
     initTelegram();
+    const applyTheme = () => { document.documentElement.dataset.theme = tg?.colorScheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); };
+    applyTheme();
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+    return () => observer.disconnect();
   }, []);
 
   if (!isTelegramWebApp()) {
-    return <div className="p-6 text-tg-text" role="alert">
-      <h1 className="text-xl font-bold mb-3">Откройте приложение в Telegram</h1>
-      <p>Перейдите в личный чат с ботом и нажмите кнопку приложения.</p>
+    return <div className="app-shell page text-tg-text" role="alert">
+      <p className="eyebrow mb-5">Hookah · моя коллекция</p>
+      <h1 className="mb-4">Откройте приложение в Telegram</h1>
+      <p className="text-tg-hint leading-relaxed">Перейдите в чат с ботом и нажмите кнопку приложения. Ваша коллекция будет ждать вас там.</p>
     </div>;
   }
 
@@ -40,8 +46,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-tg-bg">
-      <main className="pb-16">
+    <div className="app-shell min-h-screen bg-tg-bg">
+      <main className="app-main">
         {renderPage()}
       </main>
       <Navigation />

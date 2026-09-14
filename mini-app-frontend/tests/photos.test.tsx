@@ -28,7 +28,7 @@ it('requires review, accepts edits and excludes removed products before saving',
   expect(tobaccosApi.createBulk).not.toHaveBeenCalled();
   fireEvent.change(screen.getByLabelText('Название 1'), { target: { value: 'Corrected Mango' } });
   fireEvent.click(screen.getByRole('button', { name: 'Убрать строку 2' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Добавить всё (1)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Добавить в коллекцию (1)' }));
   await waitFor(() => expect(tobaccosApi.createBulk).toHaveBeenCalledWith([{ name: 'Corrected Mango', brand: 'A' }]));
   expect(onAdded).toHaveBeenCalledOnce();
   expect(await screen.findByRole('status')).toHaveTextContent('Добавлено: 1');

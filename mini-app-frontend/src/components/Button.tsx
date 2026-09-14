@@ -12,6 +12,7 @@ interface ButtonProps {
   loading?: boolean;
   icon?: ReactNode;
   className?: string;
+  'aria-label'?: string;
 }
 
 export function Button({
@@ -24,8 +25,9 @@ export function Button({
   loading = false,
   icon,
   className = '',
+  'aria-label': ariaLabel,
 }: ButtonProps) {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-xl transition-all tap-highlight';
+  const baseStyles = 'app-button inline-flex items-center justify-center font-semibold rounded-xl transition-all tap-highlight';
   
   const variantStyles = {
     primary: 'bg-tg-button text-tg-button-text hover:opacity-90',
@@ -49,6 +51,9 @@ export function Button({
 
   return (
     <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-busy={loading || undefined}
       onClick={handleClick}
       disabled={disabled || loading}
       className={`
@@ -61,7 +66,7 @@ export function Button({
       `}
     >
       {loading ? (
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <><Loader2 aria-hidden="true" className="w-4 h-4 animate-spin" /><span>{children}</span></>
       ) : (
         <>
           {icon}

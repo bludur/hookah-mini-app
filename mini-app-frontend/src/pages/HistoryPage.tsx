@@ -81,7 +81,7 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen pb-20 px-4 pt-4">
+    <div className="page">
       <h1 className="text-2xl font-bold text-tg-text mb-4">
         История миксов
       </h1>
@@ -106,7 +106,7 @@ export function HistoryPage() {
               <div className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <h3 className="font-semibold text-tg-text flex-1">
-                    🎨 {mix.name}
+                    {mix.name}
                   </h3>
                   <div className="flex items-center gap-1">
                     {mix.is_favorite && <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />}

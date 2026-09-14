@@ -30,19 +30,19 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       ref={dialog}
       aria-labelledby={title ? titleId : undefined}
       aria-label={title ? undefined : 'Диалог'}
-      onCancel={onClose}
+      onCancel={event => { event.preventDefault(); onClose(); }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
-      className="m-auto p-0 w-[90%] max-w-sm rounded-2xl bg-tg-bg text-tg-text shadow-xl backdrop:bg-black/50 open:flex open:flex-col"
+      className="app-dialog m-auto p-0 w-[calc(100%-2rem)] max-w-md rounded-2xl bg-tg-section-bg text-tg-text shadow-xl backdrop:bg-black/50 open:flex open:flex-col"
       style={{ maxHeight: 'calc(var(--tg-viewport-stable-height, 100dvh) - 2rem)' }}
     >
         {/* Header */}
         {title && (
-          <div className="flex shrink-0 items-center justify-between px-4 py-2 border-b border-tg-secondary-bg">
-            <h2 id={titleId} className="text-sm font-semibold text-tg-text">{title}</h2>
+          <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-tg-secondary-bg">
+            <h2 id={titleId} className="text-lg font-semibold text-tg-text">{title}</h2>
             <button
               onClick={onClose}
               aria-label="Закрыть"
-              className="p-1 -mr-1 rounded-full hover:bg-tg-secondary-bg transition-colors tap-highlight"
+              className="w-10 h-10 flex items-center justify-center -mr-2 rounded-full hover:bg-tg-secondary-bg transition-colors tap-highlight"
             >
               <X className="w-4 h-4 text-tg-hint" />
             </button>
@@ -50,7 +50,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         )}
         
         {/* Body */}
-        <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-3">
+        <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-5">
           {children}
         </div>
     </dialog>

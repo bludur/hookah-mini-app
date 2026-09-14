@@ -96,12 +96,12 @@ export function FavoritesPage() {
   }
 
   return (
-    <div className="min-h-screen pb-20 px-4 pt-4">
+    <div className="page">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-tg-text">
           Избранное
-          <span className="text-tg-hint font-normal text-lg ml-2">
-            ({favorites.length})
+          <span className="count-badge ml-2">
+            {favorites.length}
           </span>
         </h1>
         {favorites.length > 0 && (

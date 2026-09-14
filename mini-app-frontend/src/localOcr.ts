@@ -16,9 +16,9 @@ export function readPhotoLocally(image: string, signal: AbortSignal, progress: (
     worker.onmessage = ({ data }) => {
       if (data.error) finish('Не удалось прочитать фото. Проверьте интернет или введите название вручную.');
       else if (typeof data.text === 'string') finish(undefined, data.text.slice(0, 10000));
-      else if (typeof data.progress === 'number') progress(`Читаем на устройстве: ${data.progress}%`);
+      else if (typeof data.progress === 'number') progress(`Читаем этикетку: ${data.progress}%`);
     };
-    progress('Загружаем распознавание и словари. Первый запуск требует интернета…');
+    progress('Готовим распознавание…');
     const assets = new URL(`${import.meta.env.BASE_URL}ocr/v7/`, window.location.origin).href;
     worker.postMessage({ image, assets });
   });

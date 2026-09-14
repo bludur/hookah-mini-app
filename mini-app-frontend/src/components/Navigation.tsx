@@ -19,20 +19,19 @@ export function Navigation() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-tg-section-bg border-t border-tg-secondary-bg safe-area-bottom z-50">
-      <div className="flex justify-around items-center h-16 px-2">
+    <nav className="app-nav" aria-label="Основная навигация">
+      <div className="flex justify-around items-center gap-1">
         {tabs.map(({ id, icon: Icon, label }) => {
           const isActive = currentTab === id;
           return (
             <button
               key={id}
               onClick={() => handleTabClick(id)}
-              className={`flex flex-col items-center justify-center flex-1 h-full tap-highlight transition-colors ${
-                isActive ? 'text-tg-button' : 'text-tg-hint'
-              }`}
+              aria-current={isActive ? 'page' : undefined}
+              className="nav-item tap-highlight"
             >
-              <Icon className="w-6 h-6 mb-1" strokeWidth={isActive ? 2.5 : 2} />
-              <span className="text-xs font-medium">{label}</span>
+              <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
+              <span className="font-medium">{label}</span>
             </button>
           );
         })}

@@ -10,9 +10,9 @@ import { Loader } from '../components/Loader';
 import { hapticFeedback } from '../telegram';
 
 const profileOptions = [
-  { id: 'сладкий', icon: Candy, label: 'Сладкий', color: 'bg-pink-500' },
-  { id: 'кислый', icon: Citrus, label: 'Кислый', color: 'bg-yellow-500' },
-  { id: 'свежий', icon: Leaf, label: 'Свежий', color: 'bg-green-500' },
+  { id: 'сладкий', icon: Candy, label: 'Сладкий', color: 'profile-choice' },
+  { id: 'кислый', icon: Citrus, label: 'Кислый', color: 'profile-choice' },
+  { id: 'свежий', icon: Leaf, label: 'Свежий', color: 'profile-choice' },
 ];
 
 const roleEmojis: Record<string, string> = {
@@ -113,7 +113,7 @@ export function MixPage() {
 
   if (tobaccos.length < 2) {
     return (
-      <div className="min-h-screen pb-20 px-4 pt-4">
+      <div className="page">
         <EmptyState
           icon={<AlertCircle className="w-16 h-16" />}
           title="Мало табаков"
@@ -124,7 +124,7 @@ export function MixPage() {
   }
 
   return (
-    <div className="min-h-screen pb-20 px-4 pt-4">
+    <div className="page">
       <h1 className="text-2xl font-bold text-tg-text mb-4">
         Подбор микса
       </h1>
@@ -196,7 +196,7 @@ export function MixPage() {
 
           {/* By Profile */}
           <Card>
-            <h3 className="font-semibold text-tg-text mb-3">По вкусовому профилю</h3>
+            <h3 className="font-semibold text-tg-text mb-3">Какой вкус хочется?</h3>
             <div className="grid grid-cols-3 gap-2">
               {profileOptions.map(({ id, icon: Icon, label, color }) => (
                 <button
@@ -205,7 +205,7 @@ export function MixPage() {
                     hapticFeedback.light();
                     generateMix('profile', undefined, id);
                   }}
-                  className={`${color} text-white p-4 rounded-xl flex flex-col items-center gap-2 tap-highlight transition-transform active:scale-95`}
+                  className={`${color} p-4 rounded-xl flex flex-col items-center gap-2 tap-highlight transition-transform active:scale-95`}
                 >
                   <Icon className="w-6 h-6" />
                   <span className="text-sm font-medium">{label}</span>
@@ -220,7 +220,7 @@ export function MixPage() {
               hapticFeedback.medium();
               generateMix('surprise');
             }}
-            className="bg-gradient-to-br from-purple-500 to-pink-500 text-white cursor-pointer"
+            className="mix-surprise cursor-pointer"
           >
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center">
@@ -228,7 +228,7 @@ export function MixPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-lg">Удиви меня!</h3>
-                <p className="text-white/80 text-sm">AI подберёт креативный микс</p>
+                <p className="text-white/80 text-sm">Новое сочетание из вашей коллекции</p>
               </div>
             </div>
           </Card>
@@ -242,7 +242,7 @@ export function MixPage() {
             <Palette className="w-10 h-10 text-tg-button animate-spin" style={{ animationDuration: '3s' }} />
           </div>
           <p className="text-tg-text font-medium">Составляю микс...</p>
-          <p className="text-tg-hint text-sm">Это займёт несколько секунд</p>
+          <p className="text-tg-hint text-sm">Подбираем сочетание и пропорции</p>
         </div>
       )}
 
@@ -270,9 +270,9 @@ export function MixPage() {
       {/* Mix Result */}
       {currentMix && !isGenerating && (
         <div className="space-y-4 animate-fade-in">
-          <Card className="bg-gradient-to-br from-tg-button/10 to-purple-500/10">
+          <Card className="">
             <h2 className="text-2xl font-bold text-tg-text mb-4">
-              🎨 {currentMix.name}
+              {currentMix.name}
             </h2>
 
             {/* Components */}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, ImagePlus, Trash2 } from 'lucide-react';
+import { Camera, ImagePlus, Trash2, ScanLine } from 'lucide-react';
 import { tobaccosApi } from '../api';
 import { preparePhoto } from '../photo';
 import { readPhotoLocally } from '../localOcr';
@@ -53,7 +53,7 @@ export function PhotoImport({ onAdded, catalog = [] }: { onAdded: () => void; ca
   };
   const recognize = async () => {
     if (busy || !image) return;
-    setBusy(true); setError(''); setProgress('Обрабатываем в AI… Бесплатная модель может отвечать до минуты.');
+    setBusy(true); setError(''); setProgress('Распознаём фото…');
     try {
       const result = await tobaccosApi.recognizePhoto(image);
       if (!alive.current) return;
@@ -86,44 +86,45 @@ export function PhotoImport({ onAdded, catalog = [] }: { onAdded: () => void; ca
       setOpen(true); setError(''); setNotice('');
     }}>Добавить по фото</Button>
     {notice && <p role="status" className="text-sm text-tg-hint w-full">{notice}</p>}
-    <Modal isOpen={open} title="Табаки по фото" onClose={() => {
+    <Modal isOpen={open} title="Добавить по фото" onClose={() => {
       if (!busy) { setOpen(false); setImage(''); setRows(null); setError(''); setLocalText(''); setCandidates([]); }
     }}>
       <div className="space-y-3">
-        <p className="text-sm text-tg-hint">Для чтения на устройстве снимите одну пачку крупно, названиями к камере, без бликов. Для AI можно снять до 5 пачек.</p>
+        <div className="photo-step"><span data-active={rows === null}>01 · Фото</span><span aria-hidden="true">—</span><span data-active={rows !== null}>02 · Проверка</span></div>
+        {!image && rows === null && <div className="photo-intro"><div className="icon-tile"><ScanLine className="w-6 h-6" /></div><h3 className="font-semibold mb-2">Наведите камеру на пачку</h3><p className="text-sm text-tg-hint">Название должно быть видно целиком.<br />Без бликов — получится точнее.</p></div>}
         <input ref={camera} aria-label="Снять пачки" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void choose(file); }} />
         <input ref={gallery} aria-label="Выбрать фото пачек" type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void choose(file); }} />
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => camera.current?.click()} icon={<Camera className="w-4 h-4" />}>Камера</Button>
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => gallery.current?.click()} icon={<ImagePlus className="w-4 h-4" />}>Галерея</Button>
         </div>
-        {image && <img src={`data:image/jpeg;base64,${image}`} alt="Выбранное фото пачек" className="w-full max-h-48 object-contain rounded-xl" />}
+        {image && <img src={`data:image/jpeg;base64,${image}`} alt="Выбранное фото пачек" className="photo-preview" />}
         {rows === null && <>
-          <p className="text-xs text-tg-hint">На устройстве — бесплатно, без дневной квоты. Фото не отправляется на сервер. При первом запуске загрузятся словари русского и английского; скорость зависит от телефона.</p>
-          <Button fullWidth disabled={!image || busy} loading={busy} onClick={recognizeLocal}>Прочитать на устройстве</Button>
-          <Button fullWidth variant="secondary" disabled={busy} onClick={() => { setRows([{ name: '', brand: '' }]); setUnreadable(false); }}>Ввести вручную</Button>
+          <p className="text-xs text-tg-hint">Фото остаётся на вашем устройстве.</p>
+          <Button fullWidth disabled={!image || busy} loading={busy} icon={<ScanLine className="w-4 h-4" />} onClick={recognizeLocal}>Прочитать на устройстве</Button>
+          <Button fullWidth variant="ghost" disabled={busy} onClick={() => { setRows([{ name: '', brand: '' }]); setUnreadable(false); }}>Ввести вручную</Button>
         </>}
         {rows !== null && <>
-          <p className="text-sm">Проверьте названия и бренды. В коллекцию попадут только строки, которые вы подтвердите.</p>
-          {(unreadable || !rows.length) && <p role="status" className="text-sm text-tg-hint">Не всё удалось прочитать. Проверьте список или снимите нераспознанные пачки ближе.</p>}
-          {localText && <details><summary className="text-sm cursor-pointer">Прочитанный текст и подсказки</summary>
-            <p className="text-xs text-tg-hint">Сверяем с вашей коллекцией и списком брендов. Неизвестный вкус выберите из текста или впишите вручную.</p>
+          <p className="text-sm">Всё верно? При необходимости исправьте название и бренд.</p>
+          {(unreadable || !rows.length) && <p role="status" className="text-sm text-tg-hint">Не удалось определить название. Впишите его или выберите из прочитанного текста.</p>}
+          {localText && <details><summary className="text-sm cursor-pointer">Текст с упаковки</summary>
+            <p className="text-xs text-tg-hint">Выберите нужную строку или впишите название самостоятельно.</p>
             <pre className="text-xs whitespace-pre-wrap break-words max-h-40 overflow-auto">{localText}</pre>
           </details>}
           {rows.map((row, index) => <div key={index} className="space-y-2 p-3 bg-tg-secondary-bg rounded-xl">
-            <Input aria-label={`Название ${index + 1}`} value={row.name} maxLength={100} disabled={busy} onChange={e => edit(index, 'name', e.target.value)} />
+            <Input label="Название вкуса" aria-label={`Название ${index + 1}`} value={row.name} maxLength={100} disabled={busy} onChange={e => edit(index, 'name', e.target.value)} />
             {index === 0 && candidates.length > 0 && <select aria-label="Выбрать название из текста" className="w-full p-2 rounded bg-tg-secondary-bg text-tg-text" value="" disabled={busy} onChange={e => { if (e.target.value) edit(index, 'name', e.target.value); }}>
               <option value="">Выбрать название из текста</option>
               {candidates.map(candidate => <option key={candidate} value={candidate}>{candidate}</option>)}
             </select>}
-            <Input aria-label={`Бренд ${index + 1}`} placeholder="Бренд (если читается)" value={row.brand} maxLength={100} disabled={busy} onChange={e => edit(index, 'brand', e.target.value)} />
-            <Button size="sm" variant="secondary" disabled={busy} onClick={() => setRows(rows.filter((_, i) => i !== index))} icon={<Trash2 className="w-4 h-4" />}>Убрать строку {index + 1}</Button>
+            <Input label="Бренд" aria-label={`Бренд ${index + 1}`} placeholder="Необязательно" value={row.brand} maxLength={100} disabled={busy} onChange={e => edit(index, 'brand', e.target.value)} />
+            <Button size="sm" variant="ghost" aria-label={`Убрать строку ${index + 1}`} disabled={busy} onClick={() => setRows(rows.filter((_, i) => i !== index))} icon={<Trash2 className="w-4 h-4" />}>Убрать</Button>
           </div>)}
-          <Button fullWidth loading={busy} disabled={busy || !rows.length || rows.some(r => r.name.trim().length < 2)} onClick={save}>Добавить всё ({rows.length})</Button>
+          <Button fullWidth loading={busy} disabled={busy || !rows.length || rows.some(r => r.name.trim().length < 2)} onClick={save}>Добавить в коллекцию ({rows.length})</Button>
           <Button fullWidth variant="secondary" disabled={busy} onClick={() => { setRows(null); setImage(''); setError(''); setLocalText(''); setCandidates([]); }}>Другое фото</Button>
         </>}
-        {image && <details><summary className="text-sm cursor-pointer">Сложный снимок? Помощь AI</summary>
-          <p className="text-xs text-tg-hint my-2">Только кнопка ниже отправляет фото в OpenRouter и модель распознавания. Наш сервис не сохраняет снимок. Бесплатно, до 3 попыток в сутки; действует общий лимит сервиса. Результат заменит текущий черновик.</p>
+        {image && <details className="ai-option"><summary>Сложный снимок? Помощь AI</summary>
+          <p className="text-xs text-tg-hint my-2">Для сложной этикетки или нескольких пачек. Фото будет отправлено в OpenRouter для распознавания. Результат заменит текущий список.</p>
           <Button fullWidth variant="secondary" disabled={busy} onClick={recognize}>Распознать через AI</Button>
         </details>}
         {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
