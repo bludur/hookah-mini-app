@@ -1,3 +1,4 @@
+import { ShareButton } from '../components/ShareButton';
 import { ErrorState } from '../components/ErrorState';
 import { PhotoImport } from '../components/PhotoImport';
 import { useState, useEffect } from 'react';
@@ -203,6 +204,8 @@ export function CollectionPage() {
           Добавить список
         </Button>
       </div>
+
+      <div className="mb-5"><ShareButton kind="collection" /></div>
 
       {/* Tobaccos List */}
       {filteredTobaccos.length === 0 ? (

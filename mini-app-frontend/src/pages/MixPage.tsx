@@ -1,3 +1,4 @@
+import { ShareButton } from '../components/ShareButton';
 import { ErrorState } from '../components/ErrorState';
 import { useState, useEffect } from 'react';
 import { Palette, Sparkles, Candy, Citrus, Leaf, ThumbsUp, ThumbsDown, Star, RefreshCw, AlertCircle } from 'lucide-react';
@@ -311,6 +312,8 @@ export function MixPage() {
               <p className="text-sm text-yellow-700">{currentMix.tips}</p>
             </div>
           </Card>
+
+          <ShareButton kind="mix" mixId={currentMix.id} />
 
           {/* Actions */}
           <div className="grid grid-cols-4 gap-2">

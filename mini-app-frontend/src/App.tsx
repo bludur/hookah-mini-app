@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { SharedPage } from './pages/SharedPage';
+import { useEffect, useState } from 'react';
 import { useStore } from './store';
 import { initTelegram, isTelegramWebApp, tg } from './telegram';
 import { Navigation } from './components/Navigation';
@@ -10,6 +11,9 @@ import { FavoritesPage } from './pages/FavoritesPage';
 
 function App() {
   const { currentTab } = useStore();
+  const readShare = () => window.location.hash.startsWith('#share=') ? window.location.hash.slice(7) : null;
+  const [shareToken, setShareToken] = useState(readShare);
+  useEffect(() => { const update = () => setShareToken(readShare()); window.addEventListener('hashchange', update); return () => window.removeEventListener('hashchange', update); }, []);
 
   useEffect(() => {
     initTelegram();
@@ -19,6 +23,8 @@ function App() {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
     return () => observer.disconnect();
   }, []);
+
+  if (shareToken !== null) return <SharedPage token={shareToken} />;
 
   if (!isTelegramWebApp()) {
     return <div className="app-shell page text-tg-text" role="alert">

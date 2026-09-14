@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from contextlib import asynccontextmanager
 from typing import Annotated
 
@@ -20,6 +21,7 @@ from hookah_core.llm import llm_service
 from hookah_core.photos import PhotoRequest, PhotoResult, MAX_UPLOAD_BODY, photo_limiter, recognize_photo
 from hookah_core.models import User, Category, Tobacco, Mix
 from hookah_core import services
+from hookah_core.sharing import ShareCreate, ShareOpen, share_store
 from schemas import (UserResponse, CategoryResponse, TobaccoCreate, TobaccoUpdate, TobaccoResponse,
                      TobaccoBulkCreate, TobaccoBulkResponse, MixResponse, MixGenerateRequest,
                      MixGenerateResponse, MixRateRequest, MixFavoriteRequest, StatsResponse)
@@ -262,6 +264,43 @@ async def liveness():
     # Platform probes must not keep a serverless database awake and consume its quota.
     # Startup still checks migrations and Redis; /api/health checks database readiness.
     return {'status': 'ok'}
+
+
+@app.post('/api/shares', status_code=201)
+async def create_share(data: ShareCreate, user: CurrentUser, session: Session):
+    if data.kind == 'mix':
+        item = await owned_mix(session, user.id, data.mix_id)
+        snapshot = {'kind': 'mix', 'title': item.name, 'description': item.description,
+                    'tips': item.tips, 'components': [
+                        {'name': re.sub(r'^#\d+: ', '', name), 'portion': value['portion'], 'role': value['role']}
+                        for name, value in item.components.items()]}
+    else:
+        items = (await session.scalars(select(Tobacco).where(Tobacco.user_id == user.id).order_by(Tobacco.name))).all()
+        if not items:
+            raise DomainError('Сначала добавьте табаки в коллекцию.', 422)
+        snapshot = {'kind': 'collection', 'title': 'Список табаков',
+                    'tobaccos': [{'name': item.name, 'brand': item.brand} for item in items]}
+    await session.commit()
+    return await share_store.create(user.id, snapshot)
+
+
+@app.get('/api/shares')
+async def list_shares(user: CurrentUser):
+    return await share_store.list(user.id)
+
+
+@app.delete('/api/shares/{identifier}')
+async def revoke_share(identifier: str, user: CurrentUser):
+    if not re.fullmatch(r'[a-f0-9]{64}', identifier):
+        raise HTTPException(404, 'Ссылка не найдена.')
+    await share_store.revoke(user.id, identifier)
+    return {'message': 'Ссылка отключена'}
+
+
+@app.post('/api/shares/open')
+async def open_share(data: ShareOpen, request: Request):
+    # Public read deliberately has no CurrentUser/DB dependency. Token stays out of URLs/access logs.
+    return await share_store.open(data.token, request.client.host if request.client else 'unknown')
 
 
 @app.get('/api/health')

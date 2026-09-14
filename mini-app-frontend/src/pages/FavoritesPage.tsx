@@ -1,3 +1,4 @@
+import { ShareButton } from '../components/ShareButton';
 import { ErrorState } from '../components/ErrorState';
 import { useState, useEffect } from 'react';
 import { Star, Trash2 } from 'lucide-react';
@@ -163,6 +164,8 @@ export function FavoritesPage() {
       >
         {selectedMix && (
           <div className="space-y-4">
+            <ShareButton kind="mix" mixId={selectedMix.id} />
+
             {/* Components */}
             <div>
               <h4 className="text-sm font-medium text-tg-hint uppercase tracking-wide mb-2">
